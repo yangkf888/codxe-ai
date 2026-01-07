@@ -2,6 +2,11 @@ import dotenv from "dotenv";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import pLimit from "p-limit";
+import fs from "fs";
+import path from "path";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
+import { createClient } from "redis";
 
 dotenv.config();
 
@@ -11,6 +16,13 @@ const APP_TOKEN = process.env.APP_TOKEN;
 const KIE_API_KEY = process.env.KIE_API_KEY;
 const KIE_BASE_URL = process.env.KIE_BASE_URL || "https://api.kie.ai";
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://your-domain.com";
+const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6380";
+const TASK_TTL_SECONDS = Number(process.env.TASK_TTL_SECONDS || 60 * 60 * 24 * 7);
+const FILES_DIR = process.env.FILES_DIR || path.resolve(process.cwd(), "files");
+const PUBLIC_FILES_PATH = process.env.PUBLIC_FILES_PATH || "/files";
+const NORMALIZED_FILES_PATH = PUBLIC_FILES_PATH.startsWith("/")
+  ? PUBLIC_FILES_PATH
+  : `/${PUBLIC_FILES_PATH}`;
 
 if (!APP_TOKEN) {
   console.warn("APP_TOKEN is not set; all requests will be rejected.");
@@ -20,12 +32,121 @@ if (!KIE_API_KEY) {
   console.warn("KIE_API_KEY is not set; video requests will fail.");
 }
 
+const redisClient = createClient({ url: REDIS_URL });
+redisClient.on("error", (error) => {
+  console.error("Redis error", error);
+});
+
+const taskKey = (localTaskId) => `aiVideo:task:${localTaskId}`;
+const mapKey = (kieTaskId) => `aiVideo:map:${kieTaskId}`;
+const recentKey = "aiVideo:recent";
+
+const buildPublicVideoUrl = (localTaskId) => {
+  const base = PUBLIC_BASE_URL.replace(/\/+$/, "");
+  return `${base}${NORMALIZED_FILES_PATH}/${localTaskId}.mp4`;
+};
+
+const parseTask = (raw) => {
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    console.warn(`Failed to parse task payload: ${error.message}`);
+    return null;
+  }
+};
+
+const getTask = async (localTaskId) => {
+  const raw = await redisClient.get(taskKey(localTaskId));
+  return parseTask(raw);
+};
+
+const saveTask = async (task, { refreshRecent = false } = {}) => {
+  const multi = redisClient.multi();
+  multi.set(taskKey(task.localTaskId), JSON.stringify(task), { EX: TASK_TTL_SECONDS });
+  if (task.kieTaskId) {
+    multi.set(mapKey(task.kieTaskId), task.localTaskId, { EX: TASK_TTL_SECONDS });
+  }
+  if (refreshRecent) {
+    const score = Number(new Date(task.createdAt)) || Date.now();
+    multi.zAdd(recentKey, [{ score, value: task.localTaskId }]);
+    multi.expire(recentKey, TASK_TTL_SECONDS);
+  }
+  await multi.exec();
+};
+
+const ensureFilesDir = async () => {
+  await fs.promises.mkdir(FILES_DIR, { recursive: true });
+};
+
+const downloadVideo = async (localTaskId, originUrl) => {
+  const response = await fetch(originUrl);
+  if (!response.ok) {
+    throw new Error(`Download failed with status ${response.status}`);
+  }
+  await ensureFilesDir();
+  const filePath = path.join(FILES_DIR, `${localTaskId}.mp4`);
+  if (!response.body) {
+    throw new Error("Download response missing body");
+  }
+  await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(filePath));
+  return buildPublicVideoUrl(localTaskId);
+};
+
+const downloadAndPersistVideo = async (localTaskId, originUrl) => {
+  try {
+    const videoUrl = await downloadVideo(localTaskId, originUrl);
+    const task = await getTask(localTaskId);
+    if (!task) {
+      return;
+    }
+    task.video_url = videoUrl;
+    await saveTask(task);
+  } catch (error) {
+    console.warn(`Failed to download video for task ${localTaskId}: ${error.message}`);
+    const task = await getTask(localTaskId);
+    if (!task) {
+      return;
+    }
+    task.error = task.error || `Failed to download video: ${error.message}`;
+    await saveTask(task);
+  }
+};
+
+const parseResultVideoUrl = (rawResultJson) => {
+  if (!rawResultJson) {
+    return null;
+  }
+  let payload = rawResultJson;
+  if (typeof rawResultJson === "string") {
+    try {
+      payload = JSON.parse(rawResultJson);
+    } catch (error) {
+      if (rawResultJson.startsWith("http")) {
+        return rawResultJson;
+      }
+      console.warn(`Failed to parse resultJson: ${error.message}`);
+      return null;
+    }
+  }
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const resultUrls = payload.resultUrls || payload.resultUrl;
+  if (Array.isArray(resultUrls)) {
+    return resultUrls[0] || null;
+  }
+  if (typeof resultUrls === "string") {
+    return resultUrls;
+  }
+  return null;
+};
+
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
-
-// In-memory storage; mappings will be lost if the server restarts.
-const taskStore = new Map();
-const kieToLocal = new Map();
+app.use(NORMALIZED_FILES_PATH, express.static(FILES_DIR));
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
@@ -83,10 +204,7 @@ const createOne = async (job = {}) => {
     throw new ApiError(400, "Missing required fields");
   }
 
-  if (![
-    "t2v",
-    "i2v"
-  ].includes(mode)) {
+  if (!["t2v", "i2v"].includes(mode)) {
     throw new ApiError(400, "Invalid mode");
   }
 
@@ -134,7 +252,7 @@ const createOne = async (job = {}) => {
   const response = await fetch(`${KIE_BASE_URL}/api/v1/jobs/createTask`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${KIE_API_KEY}`,
+      Authorization: `Bearer ${KIE_API_KEY}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
@@ -156,18 +274,29 @@ const createOne = async (job = {}) => {
 
   const kieTaskId = data.data.taskId;
   const task = {
-    id: localTaskId,
+    localTaskId,
     createdAt,
-    params: { mode, prompt, image_url, image_urls, duration, aspect_ratio },
+    mode,
+    prompt,
     status: "queued",
     progress: 0,
     video_url: null,
+    origin_video_url: null,
     error: null,
-    kieTaskId
+    kieTaskId,
+    params: {
+      mode,
+      prompt,
+      image_url,
+      image_urls,
+      duration,
+      aspect_ratio,
+      remove_watermark,
+      character_id_list
+    }
   };
 
-  taskStore.set(localTaskId, task);
-  kieToLocal.set(kieTaskId, localTaskId);
+  await saveTask(task, { refreshRecent: true });
   console.log(`Created task localTaskId=${localTaskId} kieTaskId=${kieTaskId}`);
 
   return { localTaskId, kieTaskId, status: task.status };
@@ -214,16 +343,16 @@ app.post("/api/video/batch_create", limiter, async (req, res) => {
     jobs.map((job, index) =>
       limit(async () => {
         try {
-          const { localTaskId, kieTaskId, status } = await createOne(job);
+          const { localTaskId } = await createOne(job);
           return {
             index,
-            task_id: localTaskId,
-            kie_task_id: kieTaskId,
-            status
+            ok: true,
+            task_id: localTaskId
           };
         } catch (error) {
           return {
             index,
+            ok: false,
             error: error.message || "Failed to create task"
           };
         }
@@ -245,7 +374,7 @@ app.get("/api/video/status", async (req, res) => {
     return res.status(400).json({ error: "task_id is required" });
   }
 
-  const task = taskStore.get(task_id);
+  const task = await getTask(task_id);
   if (!task) {
     return res.status(404).json({ error: "Task not found" });
   }
@@ -258,56 +387,100 @@ app.get("/api/video/status", async (req, res) => {
   });
 });
 
-app.post("/api/callback", (req, res) => {
+app.get("/api/video/list", async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const ids = await redisClient.zRange(recentKey, 0, limit - 1, { REV: true });
+  if (ids.length === 0) {
+    return res.json({ tasks: [] });
+  }
+  const rawTasks = await redisClient.mGet(ids.map((id) => taskKey(id)));
+  const tasks = [];
+  const missingIds = [];
+
+  rawTasks.forEach((raw, index) => {
+    if (!raw) {
+      missingIds.push(ids[index]);
+      return;
+    }
+    const task = parseTask(raw);
+    if (!task) {
+      missingIds.push(ids[index]);
+      return;
+    }
+    tasks.push({
+      localTaskId: task.localTaskId,
+      createdAt: task.createdAt,
+      mode: task.mode,
+      prompt: task.prompt,
+      status: task.status,
+      progress: task.progress,
+      video_url: task.video_url || null,
+      origin_video_url: task.origin_video_url || null,
+      error: task.error || null
+    });
+  });
+
+  if (missingIds.length > 0) {
+    await redisClient.zRem(recentKey, missingIds);
+  }
+
+  return res.json({ tasks });
+});
+
+app.post("/api/callback", async (req, res) => {
   const kieTaskId = req.body?.data?.taskId;
   const state = req.body?.data?.state;
+  const progress = req.body?.data?.progress;
 
   if (!kieTaskId) {
     return res.status(400).json({ error: "Missing taskId" });
   }
 
-  const localTaskId = kieToLocal.get(kieTaskId);
+  const localTaskId = await redisClient.get(mapKey(kieTaskId));
   if (!localTaskId) {
     console.warn(`Callback task not found for kieTaskId=${kieTaskId}`);
-    return res.status(404).json({ error: "Task not found" });
+    return res.json({ ok: true });
   }
 
-  const task = taskStore.get(localTaskId);
+  const task = await getTask(localTaskId);
   if (!task) {
     console.warn(`Callback local task missing for kieTaskId=${kieTaskId}`);
-    return res.status(404).json({ error: "Task not found" });
+    return res.json({ ok: true });
   }
 
   console.log(`Callback received kieTaskId=${kieTaskId} state=${state}`);
   if (state) {
     task.status = state;
   }
+  const normalizedProgress = Number(progress);
+  if (!Number.isNaN(normalizedProgress)) {
+    task.progress = normalizedProgress;
+  }
 
   if (state === "success") {
     task.progress = 100;
-    const rawResultJson = req.body?.data?.resultJson;
-    let resultPayload = rawResultJson;
-
-    if (typeof rawResultJson === "string") {
-      try {
-        resultPayload = JSON.parse(rawResultJson);
-      } catch (error) {
-        console.warn(`Failed to parse resultJson for kieTaskId=${kieTaskId}: ${error.message}`);
-      }
+    const originUrl = parseResultVideoUrl(req.body?.data?.resultJson);
+    if (originUrl) {
+      task.origin_video_url = originUrl;
+    } else {
+      task.error = task.error || "Missing origin video url in callback";
     }
-
-    const resultUrls = resultPayload?.resultUrls || resultPayload?.resultUrl;
-    if (Array.isArray(resultUrls)) {
-      task.video_url = resultUrls[0] || null;
-    } else if (typeof resultUrls === "string") {
-      task.video_url = resultUrls;
+    await saveTask(task);
+    if (originUrl) {
+      void downloadAndPersistVideo(localTaskId, originUrl);
     }
+    return res.json({ ok: true });
   }
 
   if (state === "fail") {
-    task.error = req.body?.data?.failMsg || req.body?.data?.msg || req.body?.data?.failCode || "Kie task failed";
+    task.error =
+      req.body?.data?.failMsg ||
+      req.body?.data?.msg ||
+      req.body?.data?.failCode ||
+      "Kie task failed";
   }
 
+  await saveTask(task);
   return res.json({ ok: true });
 });
 
@@ -315,6 +488,17 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-app.listen(PORT, () => {
-  console.log(`AI video server listening on port ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await redisClient.connect();
+    await ensureFilesDir();
+    app.listen(PORT, () => {
+      console.log(`AI video server listening on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error(`Failed to start server: ${error.message}`);
+    process.exit(1);
+  }
+};
+
+startServer();

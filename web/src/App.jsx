@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 const initialForm = {
   mode: "t2v",
@@ -11,58 +11,107 @@ const initialForm = {
 const statusLabels = {
   queued: "Queued",
   running: "Running",
+  success: "Succeeded",
+  fail: "Failed",
   succeeded: "Succeeded",
   failed: "Failed"
+};
+
+const terminalStatuses = new Set(["success", "fail", "succeeded", "failed"]);
+
+const formatProgress = (value) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return null;
+  }
+  const numeric = Number(value);
+  const normalized = numeric <= 1 ? numeric * 100 : numeric;
+  return Math.min(Math.max(Math.round(normalized), 0), 100);
+};
+
+const formatPrompt = (prompt) => prompt || "(no prompt)";
+
+const formatTimestamp = (value) => {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
 };
 
 export default function App() {
   const [form, setForm] = useState(initialForm);
   const [token, setToken] = useState("");
-  const [tasks, setTasks] = useState([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const activeTaskIds = useMemo(
-    () => tasks.filter((task) => !["succeeded", "failed"].includes(task.status)).map((task) => task.task_id),
-    [tasks]
+  const shouldPoll = useMemo(
+    () => history.some((task) => !terminalStatuses.has(task.status)),
+    [history]
+  );
+
+  const fetchHistory = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setHistoryLoading(true);
+      }
+      try {
+        const response = await fetch("/api/video/list?limit=50", {
+          headers: token ? { "X-APP-TOKEN": token } : {}
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to load history");
+        }
+        const data = await response.json();
+        setHistory(data.tasks || []);
+      } catch (err) {
+        if (!silent) {
+          setError(err.message);
+        }
+      } finally {
+        if (!silent) {
+          setHistoryLoading(false);
+        }
+      }
+    },
+    [token]
   );
 
   useEffect(() => {
-    if (activeTaskIds.length === 0) {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  useEffect(() => {
+    if (!shouldPoll) {
       return undefined;
     }
 
     const interval = setInterval(() => {
-      activeTaskIds.forEach((taskId) => {
-        fetch(`/api/video/status?task_id=${taskId}` , {
-          headers: token ? { "X-APP-TOKEN": token } : {}
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            setTasks((prev) =>
-              prev.map((task) =>
-                task.task_id === taskId
-                  ? {
-                      ...task,
-                      status: data.status || task.status,
-                      progress: data.progress ?? task.progress,
-                      video_url: data.video_url || task.video_url,
-                      error: data.error || task.error
-                    }
-                  : task
-              )
-            );
-          })
-          .catch(() => null);
-      });
-    }, 2000);
+      fetchHistory(true);
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [activeTaskIds, token]);
+  }, [fetchHistory, shouldPoll]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCopy = async (value) => {
+    if (!value) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch (err) {
+      setError(err.message || "Failed to copy link");
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -103,16 +152,18 @@ export default function App() {
       }
 
       const data = await response.json();
-      setTasks((prev) => [
-        {
-          task_id: data.task_id,
-          status: "queued",
-          progress: 0,
-          video_url: "",
-          error: ""
-        },
-        ...prev
-      ]);
+      const newTask = {
+        localTaskId: data.task_id,
+        createdAt: new Date().toISOString(),
+        mode: form.mode,
+        prompt: form.prompt,
+        status: "queued",
+        progress: 0,
+        video_url: null,
+        origin_video_url: null,
+        error: null
+      };
+      setHistory((prev) => [newTask, ...prev]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -208,31 +259,76 @@ export default function App() {
           </form>
         </section>
 
-        <section className="card">
-          <h2>Tasks</h2>
-          {tasks.length === 0 ? (
+        <section className="card history">
+          <div className="history-header">
+            <h2>History</h2>
+            <button className="ghost" type="button" onClick={() => fetchHistory()} disabled={historyLoading}>
+              {historyLoading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+          {history.length === 0 ? (
             <p className="muted">No tasks yet. Submit a prompt to get started.</p>
           ) : (
-            <ul className="task-list">
-              {tasks.map((task) => (
-                <li key={task.task_id} className="task-item">
-                  <div>
-                    <div className="task-id">{task.task_id}</div>
-                    <div className={`status status-${task.status}`}>{statusLabels[task.status] || task.status}</div>
-                  </div>
-                  <div className="task-meta">
-                    {task.progress !== undefined && (
-                      <span>Progress: {Math.round((task.progress || 0) * 100)}%</span>
-                    )}
+            <ul className="history-list">
+              {history.map((task) => {
+                const progress = formatProgress(task.progress);
+                return (
+                  <li key={task.localTaskId} className="history-item">
+                    <div className="history-top">
+                      <div>
+                        <div className="task-id">{task.localTaskId}</div>
+                        <div className="task-meta-line">
+                          <span>{formatTimestamp(task.createdAt)}</span>
+                          <span className="chip">{task.mode}</span>
+                        </div>
+                      </div>
+                      <div className={`status status-${task.status}`}>{statusLabels[task.status] || task.status}</div>
+                    </div>
+                    <p className="prompt">{formatPrompt(task.prompt)}</p>
+                    <div className="task-meta">
+                      {progress !== null && <span>Progress: {progress}%</span>}
+                      {task.error && <span className="error">{task.error}</span>}
+                    </div>
                     {task.video_url && (
-                      <a href={task.video_url} target="_blank" rel="noreferrer">
-                        View video
-                      </a>
+                      <div className="preview">
+                        <video controls src={task.video_url} />
+                      </div>
                     )}
-                    {task.error && <span className="error">{task.error}</span>}
-                  </div>
-                </li>
-              ))}
+                    <div className="history-actions">
+                      <a
+                        className={`secondary ${task.video_url ? "" : "disabled"}`}
+                        href={task.video_url || "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(event) => {
+                          if (!task.video_url) {
+                            event.preventDefault();
+                          }
+                        }}
+                        download
+                      >
+                        Download
+                      </a>
+                      <button
+                        className="secondary"
+                        type="button"
+                        onClick={() => handleCopy(task.video_url)}
+                        disabled={!task.video_url}
+                      >
+                        Copy local link
+                      </button>
+                      <button
+                        className="secondary"
+                        type="button"
+                        onClick={() => handleCopy(task.origin_video_url)}
+                        disabled={!task.origin_video_url}
+                      >
+                        Copy origin link
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
