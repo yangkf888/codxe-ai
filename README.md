@@ -18,7 +18,7 @@
 - `/api/video/create` 创建任务，返回 `task_id`。
 - `/api/video/status` 轮询任务状态。
 - 后端提供 `/api/callback` 接收 Kie AI 回调更新任务状态。
-- 内存 Map 保存任务状态，服务重启后可接受丢失。
+- 内存 Map 保存任务状态（含 localTaskId 与 kieTaskId 映射），服务重启后会丢失。
 
 ## 后端 API 约定
 
@@ -46,6 +46,12 @@ X-APP-TOKEN: <必须匹配环境变量 APP_TOKEN，否则 401>
 { "task_id": "string" }
 ```
 
+说明：
+
+- `task_id` 为本地生成的 `localTaskId`，用于前端轮询。
+- Kie 侧返回的 `kieTaskId` 仅用于回调映射，不会返回给前端。
+- 回调地址由 `PUBLIC_BASE_URL` 拼接为 `${PUBLIC_BASE_URL}/api/callback`。
+
 ### GET /api/video/status?task_id=xxx
 
 返回：
@@ -58,6 +64,12 @@ X-APP-TOKEN: <必须匹配环境变量 APP_TOKEN，否则 401>
   "error": "string (可选)"
 }
 ```
+
+### Kie 回调与重试
+
+Kie 会向 `/api/callback` 发送任务状态变更，其中 `body.data.taskId` 为 `kieTaskId`。
+后端通过 `kieTaskId -> localTaskId` 映射更新任务状态。
+如需重新回调，可在 Kie 控制台的任务详情中使用 retry callback 功能再次触发。
 
 ## 部署步骤（Linux 服务器）
 

@@ -22,7 +22,9 @@ if (!KIE_API_KEY) {
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 
+// In-memory storage; mappings will be lost if the server restarts.
 const taskStore = new Map();
+const kieToLocal = new Map();
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
@@ -50,38 +52,33 @@ app.use((req, res, next) => {
 });
 
 app.post("/api/video/create", limiter, async (req, res) => {
-  const { mode, prompt, image_url, duration, aspect_ratio } = req.body || {};
+  const { mode, prompt, image_url, image_urls, duration, aspect_ratio } = req.body || {};
 
   if (!mode || !prompt || !duration || !aspect_ratio) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  if (!['t2v', 'i2v'].includes(mode)) {
+  if (!["t2v", "i2v"].includes(mode)) {
     return res.status(400).json({ error: "Invalid mode" });
   }
 
-  if (mode === "i2v" && !image_url) {
-    return res.status(400).json({ error: "image_url is required for i2v" });
+  const resolvedImageUrls = Array.isArray(image_urls)
+    ? image_urls.filter(Boolean)
+    : image_url
+      ? [image_url]
+      : [];
+
+  if (mode === "i2v" && resolvedImageUrls.length === 0) {
+    return res.status(400).json({ error: "image_url or image_urls is required for i2v" });
   }
 
-  const taskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const localTaskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const createdAt = new Date().toISOString();
 
-  const task = {
-    id: taskId,
-    createdAt,
-    params: { mode, prompt, image_url, duration, aspect_ratio },
-    status: "queued",
-    progress: 0,
-    video_url: null,
-    error: null,
-    openai_task_id: null
-  };
-
-  taskStore.set(taskId, task);
-
   try {
-    const model = mode === "i2v" ? "sora-2-image-to-video" : "sora-2-text-to-video";
+    const t2vModel = process.env.KIE_T2V_MODEL || "sora-2-text-to-video";
+    const i2vModel = process.env.KIE_I2V_MODEL || "sora-2-image-to-video";
+    const model = mode === "i2v" ? i2vModel : t2vModel;
     const ratioMap = {
       "16:9": "landscape",
       "9:16": "portrait",
@@ -104,30 +101,40 @@ app.post("/api/video/create", limiter, async (req, res) => {
         prompt,
         aspect_ratio: ratioMap[aspect_ratio],
         n_frames: frameMap[Number(duration)],
-        image_urls: mode === "i2v" ? [image_url] : undefined,
+        image_urls: mode === "i2v" ? resolvedImageUrls : undefined,
         callBackUrl: `${PUBLIC_BASE_URL}/api/callback`
       })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      task.status = "failed";
-      task.error = `Kie API error: ${errorText}`;
-      return res.status(500).json({ error: "Failed to create video task" });
+      return res.status(502).json({ error: `Kie API error: ${errorText}` });
     }
 
     const data = await response.json();
-    task.openai_task_id = data.task_id || data.id || taskId;
-    task.status = data.status || "queued";
-    task.progress = data.progress ?? 0;
-    task.video_url = data.video_url || null;
-    task.error = data.error || null;
+    if (data?.code !== 200 || !data?.data?.taskId) {
+      return res.status(502).json({ error: data?.msg || "Kie API error" });
+    }
 
-    return res.json({ task_id: taskId });
+    const kieTaskId = data.data.taskId;
+    const task = {
+      id: localTaskId,
+      createdAt,
+      params: { mode, prompt, image_url, image_urls, duration, aspect_ratio },
+      status: "queued",
+      progress: 0,
+      video_url: null,
+      error: null,
+      kieTaskId
+    };
+
+    taskStore.set(localTaskId, task);
+    kieToLocal.set(kieTaskId, localTaskId);
+    console.log(`Created task localTaskId=${localTaskId} kieTaskId=${kieTaskId}`);
+
+    return res.json({ task_id: localTaskId });
   } catch (error) {
-    task.status = "failed";
-    task.error = error.message;
-    return res.status(500).json({ error: "Failed to create video task" });
+    return res.status(500).json({ error: `Failed to create video task: ${error.message}` });
   }
 });
 
@@ -152,23 +159,55 @@ app.get("/api/video/status", async (req, res) => {
 });
 
 app.post("/api/callback", (req, res) => {
-  const payload = req.body || {};
-  const taskId = payload.task_id || payload.id;
-  let task = taskId ? taskStore.get(taskId) : null;
+  const kieTaskId = req.body?.data?.taskId;
+  const state = req.body?.data?.state;
 
-  if (!task && taskId) {
-    task = Array.from(taskStore.values()).find((item) => item.openai_task_id === taskId);
+  if (!kieTaskId) {
+    return res.status(400).json({ error: "Missing taskId" });
   }
 
-  if (!task) {
+  const localTaskId = kieToLocal.get(kieTaskId);
+  if (!localTaskId) {
+    console.warn(`Callback task not found for kieTaskId=${kieTaskId}`);
     return res.status(404).json({ error: "Task not found" });
   }
-  task.status = payload.status || task.status;
-  task.progress = payload.progress ?? task.progress;
-  task.video_url = payload.video_url || task.video_url;
-  task.error = payload.error || task.error;
 
-  return res.json({ status: "ok" });
+  const task = taskStore.get(localTaskId);
+  if (!task) {
+    console.warn(`Callback local task missing for kieTaskId=${kieTaskId}`);
+    return res.status(404).json({ error: "Task not found" });
+  }
+
+  console.log(`Callback received kieTaskId=${kieTaskId} state=${state}`);
+  if (state) {
+    task.status = state;
+  }
+
+  if (state === "success") {
+    const rawResultJson = req.body?.data?.resultJson;
+    let resultPayload = rawResultJson;
+
+    if (typeof rawResultJson === "string") {
+      try {
+        resultPayload = JSON.parse(rawResultJson);
+      } catch (error) {
+        console.warn(`Failed to parse resultJson for kieTaskId=${kieTaskId}: ${error.message}`);
+      }
+    }
+
+    const resultUrls = resultPayload?.resultUrls || resultPayload?.resultUrl;
+    if (Array.isArray(resultUrls)) {
+      task.video_url = resultUrls[0] || null;
+    } else if (typeof resultUrls === "string") {
+      task.video_url = resultUrls;
+    }
+  }
+
+  if (state === "fail") {
+    task.error = req.body?.data?.failMsg || req.body?.data?.msg || req.body?.data?.failCode || "Kie task failed";
+  }
+
+  return res.json({ ok: true });
 });
 
 app.get("/health", (req, res) => {
