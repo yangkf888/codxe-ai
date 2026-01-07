@@ -16,6 +16,7 @@
 - 前端不包含任何 API Key，仅调用同域 `/api`。
 - 后端持有 `KIE_API_KEY`，负责调用 Kie AI 视频生成接口。
 - `/api/video/create` 创建任务，返回 `task_id`。
+- `/api/video/batch_create` 批量创建任务并支持并发限制。
 - `/api/video/status` 轮询任务状态。
 - 后端提供 `/api/callback` 接收 Kie AI 回调更新任务状态。
 - 内存 Map 保存任务状态（含 localTaskId 与 kieTaskId 映射），服务重启后会丢失。
@@ -35,8 +36,11 @@ X-APP-TOKEN: <必须匹配环境变量 APP_TOKEN，否则 401>
   "mode": "t2v" | "i2v",
   "prompt": "string",
   "image_url": "string (可选)",
+  "image_urls": ["string"],
   "duration": 5 | 10 | 15,
-  "aspect_ratio": "16:9" | "9:16" | "1:1"
+  "aspect_ratio": "16:9" | "9:16" | "1:1" | "landscape" | "portrait" | "square",
+  "remove_watermark": true,
+  "character_id_list": ["string"]
 }
 ```
 
@@ -51,6 +55,78 @@ X-APP-TOKEN: <必须匹配环境变量 APP_TOKEN，否则 401>
 - `task_id` 为本地生成的 `localTaskId`，用于前端轮询。
 - Kie 侧返回的 `kieTaskId` 仅用于回调映射，不会返回给前端。
 - 回调地址由 `PUBLIC_BASE_URL` 拼接为 `${PUBLIC_BASE_URL}/api/callback`。
+- `duration` 默认 5（对应 `n_frames="10"`）。
+- `aspect_ratio` 默认 16:9（等价 `landscape`）。
+- `i2v` 必须提供 `image_url` 或 `image_urls`。
+
+### POST /api/video/batch_create
+
+请求：
+
+```json
+{
+  "concurrency": 10,
+  "jobs": [
+    {
+      "mode": "t2v",
+      "prompt": "a cinematic shot",
+      "duration": 5,
+      "aspect_ratio": "16:9"
+    },
+    {
+      "mode": "i2v",
+      "prompt": "anime style",
+      "image_urls": ["https://example.com/01.png"],
+      "duration": 10,
+      "aspect_ratio": "portrait",
+      "remove_watermark": true
+    }
+  ]
+}
+```
+
+返回：
+
+```json
+{
+  "accepted": 2,
+  "concurrency": 10,
+  "results": [
+    { "index": 0, "task_id": "...", "kie_task_id": "...", "status": "queued" },
+    { "index": 1, "error": "..." }
+  ]
+}
+```
+
+说明：
+
+- `concurrency` 默认 10，最大 30；建议 10~20。
+- `jobs` 内字段与 `/api/video/create` 相同。
+- `results` 按 `jobs` 顺序返回对应结果。
+
+示例：
+
+```bash
+curl -X POST https://your-domain.com/api/video/batch_create \
+  -H "Content-Type: application/json" \
+  -H "X-APP-TOKEN: <your-token>" \
+  -d '{
+    "concurrency": 12,
+    "jobs": [
+      {
+        "mode": "t2v",
+        "prompt": "cinematic clouds",
+        "duration": 5,
+        "aspect_ratio": "16:9"
+      },
+      {
+        "mode": "i2v",
+        "prompt": "anime city",
+        "image_url": "https://example.com/source.png"
+      }
+    ]
+  }'
+```
 
 ### GET /api/video/status?task_id=xxx
 
