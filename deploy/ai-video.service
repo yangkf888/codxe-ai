@@ -1,0 +1,14 @@
+[Unit]
+Description=AI Video Generator API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/ai-video/server
+EnvironmentFile=/var/www/ai-video/server/.env
+ExecStart=/usr/bin/node /var/www/ai-video/server/src/index.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
