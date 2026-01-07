@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import express from "express";
 import rateLimit from "express-rate-limit";
+import pLimit from "p-limit";
 
 dotenv.config();
 
@@ -28,11 +29,149 @@ const kieToLocal = new Map();
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Rate limit exceeded" }
 });
+
+const aspectRatioMap = {
+  "16:9": "landscape",
+  "9:16": "portrait",
+  "1:1": "square",
+  landscape: "landscape",
+  portrait: "portrait",
+  square: "square"
+};
+
+const frameMap = {
+  5: "10",
+  10: "20",
+  15: "30"
+};
+
+class ApiError extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
+const resolveImageUrls = (image_url, image_urls) => {
+  if (Array.isArray(image_urls)) {
+    return image_urls.filter(Boolean);
+  }
+  if (image_url) {
+    return [image_url];
+  }
+  return [];
+};
+
+const createOne = async (job = {}) => {
+  const {
+    mode,
+    prompt,
+    image_url,
+    image_urls,
+    duration = 5,
+    aspect_ratio = "16:9",
+    remove_watermark,
+    character_id_list
+  } = job;
+
+  if (!mode || !prompt) {
+    throw new ApiError(400, "Missing required fields");
+  }
+
+  if (![
+    "t2v",
+    "i2v"
+  ].includes(mode)) {
+    throw new ApiError(400, "Invalid mode");
+  }
+
+  const resolvedImageUrls = resolveImageUrls(image_url, image_urls);
+
+  if (mode === "i2v" && resolvedImageUrls.length === 0) {
+    throw new ApiError(400, "image_url or image_urls is required for i2v");
+  }
+
+  const resolvedAspectRatio = aspectRatioMap[aspect_ratio];
+  if (!resolvedAspectRatio) {
+    throw new ApiError(400, "Invalid aspect_ratio");
+  }
+
+  const resolvedFrames = frameMap[Number(duration)];
+  if (!resolvedFrames) {
+    throw new ApiError(400, "Invalid duration");
+  }
+
+  const t2vModel = process.env.KIE_T2V_MODEL || "sora-2-text-to-video";
+  const i2vModel = process.env.KIE_I2V_MODEL || "sora-2-image-to-video";
+  const model = mode === "i2v" ? i2vModel : t2vModel;
+
+  const localTaskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const createdAt = new Date().toISOString();
+
+  const input = {
+    prompt,
+    aspect_ratio: resolvedAspectRatio,
+    n_frames: resolvedFrames
+  };
+
+  if (mode === "i2v") {
+    input.image_urls = resolvedImageUrls;
+  }
+
+  if (typeof remove_watermark === "boolean") {
+    input.remove_watermark = remove_watermark;
+  }
+
+  if (Array.isArray(character_id_list) && character_id_list.length > 0) {
+    input.character_id_list = character_id_list;
+  }
+
+  const response = await fetch(`${KIE_BASE_URL}/api/v1/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${KIE_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      callBackUrl: `${PUBLIC_BASE_URL}/api/callback`,
+      input
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new ApiError(502, `Kie API error: ${errorText}`);
+  }
+
+  const data = await response.json();
+  if (data?.code !== 200 || !data?.data?.taskId) {
+    throw new ApiError(502, data?.msg || "Kie API error");
+  }
+
+  const kieTaskId = data.data.taskId;
+  const task = {
+    id: localTaskId,
+    createdAt,
+    params: { mode, prompt, image_url, image_urls, duration, aspect_ratio },
+    status: "queued",
+    progress: 0,
+    video_url: null,
+    error: null,
+    kieTaskId
+  };
+
+  taskStore.set(localTaskId, task);
+  kieToLocal.set(kieTaskId, localTaskId);
+  console.log(`Created task localTaskId=${localTaskId} kieTaskId=${kieTaskId}`);
+
+  return { localTaskId, kieTaskId, status: task.status };
+};
 
 app.use((req, res, next) => {
   if (!req.path.startsWith("/api")) {
@@ -52,90 +191,51 @@ app.use((req, res, next) => {
 });
 
 app.post("/api/video/create", limiter, async (req, res) => {
-  const { mode, prompt, image_url, image_urls, duration, aspect_ratio } = req.body || {};
-
-  if (!mode || !prompt || !duration || !aspect_ratio) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
-
-  if (!["t2v", "i2v"].includes(mode)) {
-    return res.status(400).json({ error: "Invalid mode" });
-  }
-
-  const resolvedImageUrls = Array.isArray(image_urls)
-    ? image_urls.filter(Boolean)
-    : image_url
-      ? [image_url]
-      : [];
-
-  if (mode === "i2v" && resolvedImageUrls.length === 0) {
-    return res.status(400).json({ error: "image_url or image_urls is required for i2v" });
-  }
-
-  const localTaskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const createdAt = new Date().toISOString();
-
   try {
-    const t2vModel = process.env.KIE_T2V_MODEL || "sora-2-text-to-video";
-    const i2vModel = process.env.KIE_I2V_MODEL || "sora-2-image-to-video";
-    const model = mode === "i2v" ? i2vModel : t2vModel;
-    const ratioMap = {
-      "16:9": "landscape",
-      "9:16": "portrait",
-      "1:1": "square"
-    };
-    const frameMap = {
-      5: 10,
-      10: 20,
-      15: 30
-    };
-
-    const response = await fetch(`${KIE_BASE_URL}/api/v1/jobs/createTask`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${KIE_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        prompt,
-        aspect_ratio: ratioMap[aspect_ratio],
-        n_frames: frameMap[Number(duration)],
-        image_urls: mode === "i2v" ? resolvedImageUrls : undefined,
-        callBackUrl: `${PUBLIC_BASE_URL}/api/callback`
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(502).json({ error: `Kie API error: ${errorText}` });
-    }
-
-    const data = await response.json();
-    if (data?.code !== 200 || !data?.data?.taskId) {
-      return res.status(502).json({ error: data?.msg || "Kie API error" });
-    }
-
-    const kieTaskId = data.data.taskId;
-    const task = {
-      id: localTaskId,
-      createdAt,
-      params: { mode, prompt, image_url, image_urls, duration, aspect_ratio },
-      status: "queued",
-      progress: 0,
-      video_url: null,
-      error: null,
-      kieTaskId
-    };
-
-    taskStore.set(localTaskId, task);
-    kieToLocal.set(kieTaskId, localTaskId);
-    console.log(`Created task localTaskId=${localTaskId} kieTaskId=${kieTaskId}`);
-
+    const { localTaskId } = await createOne(req.body);
     return res.json({ task_id: localTaskId });
   } catch (error) {
-    return res.status(500).json({ error: `Failed to create video task: ${error.message}` });
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({ error: error.message || "Failed to create video task" });
   }
+});
+
+app.post("/api/video/batch_create", limiter, async (req, res) => {
+  const { concurrency, jobs } = req.body || {};
+
+  if (!Array.isArray(jobs)) {
+    return res.status(400).json({ error: "jobs must be an array" });
+  }
+
+  const normalizedConcurrency = Math.min(Math.max(Number(concurrency) || 10, 1), 30);
+  const limit = pLimit(normalizedConcurrency);
+
+  const results = await Promise.all(
+    jobs.map((job, index) =>
+      limit(async () => {
+        try {
+          const { localTaskId, kieTaskId, status } = await createOne(job);
+          return {
+            index,
+            task_id: localTaskId,
+            kie_task_id: kieTaskId,
+            status
+          };
+        } catch (error) {
+          return {
+            index,
+            error: error.message || "Failed to create task"
+          };
+        }
+      })
+    )
+  );
+
+  return res.json({
+    accepted: jobs.length,
+    concurrency: normalizedConcurrency,
+    results
+  });
 });
 
 app.get("/api/video/status", async (req, res) => {
@@ -184,6 +284,7 @@ app.post("/api/callback", (req, res) => {
   }
 
   if (state === "success") {
+    task.progress = 100;
     const rawResultJson = req.body?.data?.resultJson;
     let resultPayload = rawResultJson;
 
