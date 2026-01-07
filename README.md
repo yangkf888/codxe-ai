@@ -14,9 +14,10 @@
 ## 功能概览
 
 - 前端不包含任何 API Key，仅调用同域 `/api`。
-- 后端持有 `OPENAI_API_KEY`，负责调用 OpenAI 视频生成接口。
+- 后端持有 `KIE_API_KEY`，负责调用 Kie AI 视频生成接口。
 - `/api/video/create` 创建任务，返回 `task_id`。
 - `/api/video/status` 轮询任务状态。
+- 后端提供 `/api/callback` 接收 Kie AI 回调更新任务状态。
 - 内存 Map 保存任务状态，服务重启后可接受丢失。
 
 ## 后端 API 约定
@@ -78,9 +79,10 @@ cp server/.env.example server/.env
 编辑 `server/.env`：
 
 ```
-OPENAI_API_KEY=...
+KIE_API_KEY=...
 APP_TOKEN=...
 PORT=8787
+PUBLIC_BASE_URL=https://your-domain.com
 ```
 
 ### 3) 安装依赖并启动后端
@@ -149,5 +151,5 @@ npm run dev
 
 ## 备注
 
-- OpenAI 视频接口端点默认为 `https://api.openai.com/v1/videos`。
-- 如果 API 端点不同，可通过环境变量 `OPENAI_BASE_URL` 或 `OPENAI_VIDEO_MODEL` 覆盖。
+- Kie AI 视频接口端点默认为 `https://api.kie.ai/api/v1/jobs/createTask`。
+- 如果 API 端点不同，可通过环境变量 `KIE_BASE_URL` 覆盖。
