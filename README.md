@@ -18,8 +18,9 @@
 - `/api/video/create` 创建任务，返回 `task_id`。
 - `/api/video/batch_create` 批量创建任务并支持并发限制。
 - `/api/video/status` 轮询任务状态。
-- 后端提供 `/api/callback` 接收 Kie AI 回调更新任务状态。
-- 内存 Map 保存任务状态（含 localTaskId 与 kieTaskId 映射），服务重启后会丢失。
+- `/api/video/list` 获取最近任务列表（用于历史记录）。
+- `/api/callback` 接收 Kie AI 回调更新任务状态；回调成功后下载视频到本地并保存 7 天。
+- Redis 持久化任务状态与 `kieTaskId -> localTaskId` 映射，服务重启后仍可恢复。
 
 ## 后端 API 约定
 
@@ -92,8 +93,8 @@ X-APP-TOKEN: <必须匹配环境变量 APP_TOKEN，否则 401>
   "accepted": 2,
   "concurrency": 10,
   "results": [
-    { "index": 0, "task_id": "...", "kie_task_id": "...", "status": "queued" },
-    { "index": 1, "error": "..." }
+    { "index": 0, "ok": true, "task_id": "..." },
+    { "index": 1, "ok": false, "error": "..." }
   ]
 }
 ```
@@ -134,18 +135,46 @@ curl -X POST https://your-domain.com/api/video/batch_create \
 
 ```json
 {
-  "status": "queued" | "running" | "succeeded" | "failed",
+  "status": "queued" | "running" | "success" | "fail",
   "progress": 0.0,
   "video_url": "string (可选)",
   "error": "string (可选)"
 }
 ```
 
+### GET /api/video/list?limit=50
+
+返回：
+
+```json
+{
+  "tasks": [
+    {
+      "localTaskId": "string",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "mode": "t2v",
+      "prompt": "string",
+      "status": "queued" | "running" | "success" | "fail",
+      "progress": 0,
+      "video_url": "https://your-domain.com/files/task_xxx.mp4",
+      "origin_video_url": "https://kie.ai/...",
+      "error": null
+    }
+  ]
+}
+```
+
+说明：
+
+- `limit` 默认 50，最大 200。
+- `video_url` 为本地可访问链接（如果下载完成），否则为 `null`。
+- `origin_video_url` 为 Kie 原始链接（回调成功时写入）。
+
 ### Kie 回调与重试
 
 Kie 会向 `/api/callback` 发送任务状态变更，其中 `body.data.taskId` 为 `kieTaskId`。
 后端通过 `kieTaskId -> localTaskId` 映射更新任务状态。
-如需重新回调，可在 Kie 控制台的任务详情中使用 retry callback 功能再次触发。
+回调成功后将视频下载到本地目录并保存 7 天，失败也会返回 `200 ok`，避免平台重试风暴。
 
 ## 部署步骤（Linux 服务器）
 
@@ -158,7 +187,17 @@ git clone <your-repo> /var/www/ai-video
 cd /var/www/ai-video
 ```
 
-### 2) 配置后端环境变量
+### 2) 启动 Redis（独立容器）
+
+```bash
+docker run -d \
+  --name ai-video-redis \
+  -p 127.0.0.1:6380:6379 \
+  --restart unless-stopped \
+  redis:7
+```
+
+### 3) 配置后端环境变量
 
 ```bash
 cp server/.env.example server/.env
@@ -171,9 +210,22 @@ KIE_API_KEY=...
 APP_TOKEN=...
 PORT=8787
 PUBLIC_BASE_URL=https://your-domain.com
+REDIS_URL=redis://127.0.0.1:6380
+TASK_TTL_SECONDS=604800
+FILES_DIR=/var/www/ai-video/server/files
+PUBLIC_FILES_PATH=/files
+KIE_T2V_MODEL=sora-2-text-to-video
+KIE_I2V_MODEL=sora-2-image-to-video
 ```
 
-### 3) 安装依赖并启动后端
+### 4) 创建本地视频目录
+
+```bash
+sudo mkdir -p /var/www/ai-video/server/files
+sudo chown -R $USER:$USER /var/www/ai-video/server/files
+```
+
+### 5) 安装依赖并启动后端
 
 ```bash
 cd /var/www/ai-video/server
@@ -183,7 +235,7 @@ npm run start
 
 建议使用 systemd（见 `deploy/ai-video.service`）进行守护运行。
 
-### 4) 构建前端并放置到 Nginx 静态目录
+### 6) 构建前端并放置到 Nginx 静态目录
 
 ```bash
 cd /var/www/ai-video/web
@@ -193,7 +245,7 @@ npm run build
 
 将 `web/dist` 作为 Nginx 静态目录。
 
-### 5) 配置 Nginx
+### 7) 配置 Nginx
 
 复制 `deploy/nginx.conf` 并根据域名修改：
 
@@ -207,8 +259,18 @@ Nginx 将提供：
 
 - `/` -> `web/dist`
 - `/api` -> `http://127.0.0.1:8787`
+- `/files` -> 建议走后端静态，也可改为 Nginx 直接指向 `/var/www/ai-video/server/files`
 
-### 6) 使用 systemd 启动后端（可选）
+如需 Nginx 直接托管 `/files`，增加：
+
+```
+location /files/ {
+  alias /var/www/ai-video/server/files/;
+  add_header Cache-Control "public, max-age=86400";
+}
+```
+
+### 8) 使用 systemd 启动后端（可选）
 
 ```bash
 sudo cp /var/www/ai-video/deploy/ai-video.service /etc/systemd/system/ai-video.service
@@ -237,7 +299,61 @@ npm run dev
 
 前端请求默认走同域 `/api`，本地调试可使用 Nginx 或自行代理。
 
+## 常用 curl 示例
+
+### 创建单个任务
+
+```bash
+curl -X POST http://localhost:8787/api/video/create \
+  -H "Content-Type: application/json" \
+  -H "X-APP-TOKEN: <your-token>" \
+  -d '{
+    "mode": "t2v",
+    "prompt": "a sunset over the ocean",
+    "duration": 5,
+    "aspect_ratio": "16:9"
+  }'
+```
+
+### 批量创建任务
+
+```bash
+curl -X POST http://localhost:8787/api/video/batch_create \
+  -H "Content-Type: application/json" \
+  -H "X-APP-TOKEN: <your-token>" \
+  -d '{
+    "concurrency": 8,
+    "jobs": [
+      {
+        "mode": "t2v",
+        "prompt": "cinematic clouds",
+        "duration": 5
+      },
+      {
+        "mode": "i2v",
+        "prompt": "anime city",
+        "image_url": "https://example.com/source.png"
+      }
+    ]
+  }'
+```
+
+### 获取任务列表
+
+```bash
+curl -X GET "http://localhost:8787/api/video/list?limit=20" \
+  -H "X-APP-TOKEN: <your-token>"
+```
+
+### 查询任务状态
+
+```bash
+curl -X GET "http://localhost:8787/api/video/status?task_id=task_xxx" \
+  -H "X-APP-TOKEN: <your-token>"
+```
+
 ## 备注
 
-- Kie AI 视频接口端点默认为 `https://api.kie.ai/api/v1/jobs/createTask`。
-- 如果 API 端点不同，可通过环境变量 `KIE_BASE_URL` 覆盖。
+- 不要在前端暴露 `KIE_API_KEY`。
+- `/api/callback` 放行，不需要 `X-APP-TOKEN`。
+- `FILES_DIR` 如果使用相对路径，默认是 `server/files`。
