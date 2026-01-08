@@ -664,6 +664,7 @@ select {
     grid-auto-flow: column;
     grid-auto-columns: minmax(120px, auto);
   }
+}
 
 @media (max-width: 720px) {
   .main {
