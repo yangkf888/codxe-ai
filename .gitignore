@@ -2,3 +2,7 @@
 node_modules/
 server/node_modules/
 web/node_modules/
+
+# Ignore generated media
+server/public/uploads/
+server/files/
