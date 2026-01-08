@@ -257,18 +257,31 @@ select {
 }
 
 .upload-dropzone {
-  border: 1px dashed #475569;
-  border-radius: 12px;
-  padding: 18px;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 16px;
   text-align: center;
-  background: #0f172a;
-  color: #cbd5f5;
+  background: #6366f1;
+  color: #f8fafc;
   font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.upload-dropzone:hover {
+  background: #4f46e5;
+  box-shadow: 0 12px 24px rgba(99, 102, 241, 0.35);
 }
 
 .upload-dropzone:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .image-preview {
