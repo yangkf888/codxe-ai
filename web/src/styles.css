@@ -552,6 +552,34 @@ select {
   text-align: center;
 }
 
+.progress-container {
+  position: relative;
+  width: min(100%, 360px);
+  height: 18px;
+  border-radius: 999px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress-bar-fill {
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: linear-gradient(90deg, #38bdf8, #6366f1);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  position: relative;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
 .preview-actions {
   display: flex;
   gap: 12px;
