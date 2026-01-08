@@ -439,28 +439,6 @@ export default function App() {
                 <h1>创作中心</h1>
               </header>
               <form className="form form-section" onSubmit={handleSubmit}>
-                <div className="batch-toggle">
-                  <div>
-                    <span className="toggle-title">批量模式</span>
-                  </div>
-                  <label className="switch">
-                    <input
-                      type="checkbox"
-                      checked={batchMode}
-                      onChange={(event) => setBatchMode(event.target.checked)}
-                    />
-                    <span className="slider" />
-                  </label>
-                </div>
-
-                <div className="field">
-                  <label htmlFor="mode">生成模式</label>
-                  <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
-                    <option value="t2v">文生视频</option>
-                    <option value="i2v">图生视频</option>
-                  </select>
-                </div>
-
                 <div className="field">
                   <label htmlFor="prompt">提示词</label>
                   <textarea
@@ -471,6 +449,14 @@ export default function App() {
                     value={form.prompt}
                     onChange={handleChange}
                   />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="mode">生成模式</label>
+                  <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
+                    <option value="t2v">文生视频</option>
+                    <option value="i2v">图生视频</option>
+                  </select>
                 </div>
 
                 {form.mode === "i2v" && (
@@ -552,6 +538,20 @@ export default function App() {
                       ))}
                     </div>
                   </div>
+                </div>
+
+                <div className="batch-toggle">
+                  <div>
+                    <span className="toggle-title">批量模式</span>
+                  </div>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={batchMode}
+                      onChange={(event) => setBatchMode(event.target.checked)}
+                    />
+                    <span className="slider" />
+                  </label>
                 </div>
 
                 {batchMode && (

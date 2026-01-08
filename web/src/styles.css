@@ -204,6 +204,7 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  margin-top: 8px;
   border: 1px solid #334155;
   border-radius: 14px;
   padding: 12px 16px;
