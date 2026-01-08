@@ -48,6 +48,11 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadState, setUploadState] = useState({
+    status: "idle",
+    message: "",
+    fileName: ""
+  });
 
   const shouldPoll = useMemo(
     () => history.some((task) => !terminalStatuses.has(task.status)),
@@ -101,6 +106,9 @@ export default function App() {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (name === "image_url") {
+      setUploadState({ status: "idle", message: "", fileName: "" });
+    }
   };
 
   const handleCopy = async (value) => {
@@ -113,6 +121,59 @@ export default function App() {
       setError(err.message || "Failed to copy link");
     }
   };
+
+  const handleUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    setError("");
+    setUploadState({
+      status: "uploading",
+      message: "Uploading image...",
+      fileName: file.name
+    });
+
+    const body = new FormData();
+    body.append("file", file);
+
+    try {
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        headers: token ? { "X-APP-TOKEN": token } : {},
+        body
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to upload image");
+      }
+
+      const data = await response.json();
+      if (!data.fileUrl) {
+        throw new Error("Upload failed: missing file URL");
+      }
+
+      setForm((prev) => ({ ...prev, image_url: data.fileUrl }));
+      setUploadState({
+        status: "success",
+        message: "Upload complete. Image URL added.",
+        fileName: file.name
+      });
+    } catch (err) {
+      setUploadState({
+        status: "error",
+        message: err.message,
+        fileName: file.name
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (form.mode !== "i2v") {
+      setUploadState({ status: "idle", message: "", fileName: "" });
+    }
+  }, [form.mode]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -226,7 +287,27 @@ export default function App() {
                   placeholder="https://example.com/image.jpg"
                   value={form.image_url}
                   onChange={handleChange}
+                  disabled={uploadState.status === "uploading"}
                 />
+                <div className="upload">
+                  <input
+                    id="image_upload"
+                    name="image_upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUpload}
+                    disabled={uploadState.status === "uploading"}
+                  />
+                  <label className="muted" htmlFor="image_upload">
+                    Upload an image instead of pasting a URL.
+                  </label>
+                </div>
+                {uploadState.status !== "idle" && (
+                  <p className={`upload-status upload-${uploadState.status}`}>
+                    {uploadState.message}
+                    {uploadState.fileName ? ` (${uploadState.fileName})` : ""}
+                  </p>
+                )}
               </div>
             )}
             <div className="grid">
