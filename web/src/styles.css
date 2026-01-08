@@ -97,14 +97,19 @@ button {
 }
 
 .app-header {
-  padding: 24px 40px 0;
+  height: 60px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
   font-size: 20px;
   font-weight: 700;
   color: #f8fafc;
 }
 
 .main-content {
-  padding: 20px 40px 40px;
+  padding: 24px 40px 40px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -112,24 +117,14 @@ button {
   height: 100%;
 }
 
-.app-header {
-  height: 60px;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-}
-
 .sidebar-token {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #fff;
-  padding: 8px;
-  border-radius: 4px;
-  width: 90%;
-  font-size: 12px;
-  margin: 12px auto 0;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #f8fafc;
+  padding: 10px 12px;
+  border-radius: 10px;
+  width: 100%;
+  font-size: 13px;
 }
 
 .token-card {
@@ -142,13 +137,7 @@ button {
 }
 
 .token-card input {
-  background: #1e293b;
   border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 10px 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .generate-view {
@@ -158,7 +147,6 @@ button {
   align-items: start;
   max-width: 100%;
   height: 100%;
-  padding-top: 0;
 }
 
 .generate-left,
@@ -169,8 +157,8 @@ button {
 }
 
 .panel-header h1 {
-  margin: 6px 0 8px;
-  font-size: 24px;
+  margin: 0;
+  font-size: 22px;
 }
 
 .eyebrow {
@@ -503,7 +491,7 @@ select {
 }
 
 .preview-section video {
-  max-height: min(65vh, 600px);
+  max-height: 65vh;
   width: auto;
   max-width: 100%;
   border-radius: 12px;
@@ -519,14 +507,11 @@ select {
   flex-wrap: wrap;
 }
 
-.preview-action {
+.action-btn {
   flex: 1 1 0;
   min-width: 120px;
   text-align: center;
-  padding: 10px 12px;
-}
-
-.preview-action.primary {
+  padding: 10px 14px;
   background: #3b82f6;
   color: #ffffff;
   border-radius: 12px;
@@ -535,12 +520,12 @@ select {
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-.preview-action.primary:hover {
+.action-btn:hover {
   background: #2563eb;
   box-shadow: 0 12px 24px rgba(59, 130, 246, 0.35);
 }
 
-.preview-action:disabled {
+.action-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -555,7 +540,7 @@ select {
 .progress-container {
   position: relative;
   width: min(100%, 360px);
-  height: 18px;
+  height: 16px;
   border-radius: 999px;
   background: #0f172a;
   border: 1px solid #334155;
@@ -569,7 +554,7 @@ select {
   position: absolute;
   inset: 0;
   width: 0%;
-  background: linear-gradient(90deg, #38bdf8, #6366f1);
+  background: #3b82f6;
   transition: width 0.3s ease;
 }
 
@@ -578,12 +563,6 @@ select {
   font-size: 12px;
   font-weight: 600;
   color: #e2e8f0;
-}
-
-.preview-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
 }
 
 .notice {
@@ -632,26 +611,9 @@ select {
   color: #4ade80;
 }
 
-.progress-container {
+.history-progress {
   width: 100%;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 999px;
-  height: 10px;
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
-  width: 0%;
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  font-size: 12px;
-  color: #cbd5f5;
-  font-weight: 600;
+  height: 12px;
 }
 
 .status-fail,
