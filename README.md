@@ -176,7 +176,36 @@ Kie 会向 `/api/callback` 发送任务状态变更，其中 `body.data.taskId` 
 后端通过 `kieTaskId -> localTaskId` 映射更新任务状态。
 回调成功后将视频下载到本地目录并保存 7 天，失败也会返回 `200 ok`，避免平台重试风暴。
 
-## 部署步骤（Linux 服务器）
+## Docker 一键部署
+
+> 适用于全新服务器，一次性完成环境变量配置与容器启动。
+
+### 1) 获取代码
+
+```bash
+git clone <your-repo> /var/www/ai-video
+cd /var/www/ai-video
+```
+
+### 2) 运行一键脚本
+
+```bash
+./setup.sh
+```
+
+脚本会引导填写以下配置并生成 `.env`：
+
+- `PUBLIC_BASE_URL`
+- `KIE_API_KEY`
+- `APP_TOKEN`
+
+完成后自动执行 `docker-compose up -d --build`。
+
+### 3) 后续启动
+
+如果已有 `.env`，再次执行 `./setup.sh` 会直接启动服务。
+
+## 传统部署步骤（Linux 服务器）
 
 > 假设部署目录为 `/var/www/ai-video`，Node.js 已安装，Nginx 可用。
 
