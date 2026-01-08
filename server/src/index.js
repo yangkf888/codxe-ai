@@ -22,6 +22,7 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://your-domain.com"
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6380";
 const TASK_TTL_SECONDS = Number(process.env.TASK_TTL_SECONDS || 60 * 60 * 24 * 7);
 const FILES_DIR = process.env.FILES_DIR || path.resolve(process.cwd(), "files");
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.resolve(process.cwd(), "uploads");
 const PUBLIC_FILES_PATH = process.env.PUBLIC_FILES_PATH || "/files";
 const NORMALIZED_FILES_PATH = PUBLIC_FILES_PATH.startsWith("/")
   ? PUBLIC_FILES_PATH
@@ -82,6 +83,10 @@ const saveTask = async (task, { refreshRecent = false } = {}) => {
 
 const ensureFilesDir = async () => {
   await fs.promises.mkdir(FILES_DIR, { recursive: true });
+};
+
+const ensureUploadsDir = () => {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 };
 
 const downloadVideo = async (localTaskId, originUrl) => {
@@ -174,7 +179,23 @@ const frameMap = {
   15: "30"
 };
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      try {
+        ensureUploadsDir();
+        cb(null, UPLOADS_DIR);
+      } catch (error) {
+        cb(error);
+      }
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const safeName = file.originalname ? path.basename(file.originalname) : "upload";
+      cb(null, `${uniqueSuffix}-${safeName}`);
+    }
+  })
+});
 
 class ApiError extends Error {
   constructor(statusCode, message) {
@@ -373,17 +394,20 @@ app.post("/api/video/batch_create", limiter, async (req, res) => {
 });
 
 app.post("/api/upload", limiter, upload.single("file"), async (req, res) => {
+  let responseSent = false;
   try {
     if (!KIE_API_KEY) {
+      responseSent = true;
       return res.status(500).json({ ok: false, error: "KIE_API_KEY is not set" });
     }
 
     if (!req.file) {
+      responseSent = true;
       return res.status(400).json({ ok: false, error: "file is required" });
     }
 
     const formData = new FormData();
-    formData.append("file", req.file.buffer, {
+    formData.append("file", fs.createReadStream(req.file.path), {
       filename: req.file.originalname || "upload",
       contentType: req.file.mimetype
     });
@@ -413,19 +437,35 @@ app.post("/api/upload", limiter, upload.single("file"), async (req, res) => {
         response.data?.msg ||
         response.data?.message ||
         `Upload failed with status ${response.status}`;
+      responseSent = true;
       return res.status(502).json({ ok: false, error: message });
     }
 
     const fileUrl = response.data?.fileUrl;
     if (!fileUrl) {
+      responseSent = true;
       return res.status(502).json({ ok: false, error: "Upload response missing fileUrl" });
     }
 
+    responseSent = true;
     return res.json({ ok: true, fileUrl });
   } catch (error) {
+    console.error("Upload failed", error);
     const message =
       error.response?.data?.msg || error.response?.data?.message || error.message || "Upload failed";
-    return res.status(500).json({ ok: false, error: message });
+    if (!responseSent) {
+      responseSent = true;
+      return res.status(500).json({ ok: false, error: message });
+    }
+    return undefined;
+  } finally {
+    if (req.file?.path) {
+      try {
+        await fs.promises.unlink(req.file.path);
+      } catch (error) {
+        console.warn(`Failed to remove temp upload: ${error.message}`);
+      }
+    }
   }
 });
 
