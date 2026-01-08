@@ -182,13 +182,16 @@ export default function App() {
         throw new Error(data.error || "Failed to upload image");
       }
       const data = await response.json();
-      const fileUrl = data?.data?.fileUrl ?? data?.fileUrl;
-      if (!fileUrl) {
-        throw new Error("Upload response missing fileUrl");
+      console.log("Upload response:", data);
+      const fileUrl = data?.fileUrl || data?.data?.fileUrl || data?.url;
+      if (fileUrl) {
+        setForm((prev) => ({ ...prev, image_url: fileUrl }));
+        setUploadState({ status: "success", message: "Upload complete", fileName: file.name });
+        setError("");
+      } else {
+        alert(JSON.stringify(data));
+        setUploadState({ status: "error", message: "Upload failed", fileName: file.name });
       }
-      setForm((prev) => ({ ...prev, image_url: fileUrl }));
-      setUploadState({ status: "success", message: "Upload complete", fileName: file.name });
-      setError("");
     } catch (err) {
       setError(err.message || "Failed to upload image");
       setUploadState({ status: "error", message: "Upload failed", fileName: file.name });
