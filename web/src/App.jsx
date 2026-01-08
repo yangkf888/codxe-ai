@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const initialForm = {
   mode: "t2v",
@@ -58,6 +58,7 @@ export default function App() {
     message: "",
     fileName: ""
   });
+  const imageUploadRef = useRef(null);
 
   const shouldPoll = useMemo(
     () => history.some((task) => !terminalStatuses.has(task.status)),
@@ -201,7 +202,7 @@ export default function App() {
     }
 
     if (!batchMode && form.mode === "i2v" && !form.image_url.trim()) {
-      setError("Image URL is required for Image-to-Video.");
+      setError("Image is required for Image-to-Video.");
       return;
     }
 
@@ -443,16 +444,7 @@ export default function App() {
             )}
             {!batchMode && form.mode === "i2v" && (
               <div className="field">
-                <label htmlFor="image_url">Image URL</label>
-                <input
-                  id="image_url"
-                  name="image_url"
-                  type="url"
-                  placeholder="https://example.com/image.jpg"
-                  value={form.image_url}
-                  onChange={handleChange}
-                  disabled={uploadState.status === "uploading"}
-                />
+                <label htmlFor="image_upload">Image upload</label>
                 <div className="upload">
                   <input
                     id="image_upload"
@@ -461,10 +453,31 @@ export default function App() {
                     accept="image/*"
                     onChange={handleUpload}
                     disabled={uploadState.status === "uploading"}
+                    ref={imageUploadRef}
+                    className="upload-input"
                   />
-                  <label className="muted" htmlFor="image_upload">
-                    Upload an image instead of pasting a URL.
-                  </label>
+                  {form.image_url ? (
+                    <div className="image-preview">
+                      <img src={form.image_url} alt="Uploaded preview" />
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => imageUploadRef.current?.click()}
+                        disabled={uploadState.status === "uploading"}
+                      >
+                        更换图片
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="upload-dropzone"
+                      onClick={() => imageUploadRef.current?.click()}
+                      disabled={uploadState.status === "uploading"}
+                    >
+                      点击上传图片
+                    </button>
+                  )}
                 </div>
                 {uploadState.status !== "idle" && (
                   <p className={`upload-status upload-${uploadState.status}`}>
