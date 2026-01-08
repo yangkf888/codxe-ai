@@ -7,8 +7,10 @@ services:
       - "8787:8787"
     environment:
       PORT: "8787"
-      PUBLIC_BASE_URL: "https://kai.ykf888.top"
-      REDIS_URL: "redis://redis:6379"
+      REDIS_URL: "${REDIS_URL}"
+      KIE_API_KEY: "${KIE_API_KEY}"
+      APP_TOKEN: "${APP_TOKEN}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL}"
   redis:
     image: redis:7
     ports:
