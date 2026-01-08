@@ -17,6 +17,8 @@ services:
       - KIE_API_KEY=${KIE_API_KEY}
       - APP_TOKEN=${APP_TOKEN}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - FILES_DIR=/app/files
       - PUBLIC_FILES_PATH=/files
     volumes:
