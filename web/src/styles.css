@@ -686,6 +686,21 @@ select {
   gap: 12px;
 }
 
+.history-table-header {
+  display: grid;
+  grid-template-columns: 140px minmax(240px, 1fr) 120px minmax(240px, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 12px 20px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 14px;
+  line-height: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
 .history-row {
   display: grid;
   grid-template-columns: 140px minmax(240px, 1fr) 120px minmax(240px, 1fr);
@@ -695,20 +710,6 @@ select {
   border-radius: 16px;
   border: 1px solid #334155;
   background: #111827;
-}
-
-.history-row-head {
-  background: transparent;
-  border: none;
-  padding: 0 16px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #94a3b8;
-}
-
-.history-row-head > div {
-  font-weight: 600;
 }
 
 .history-thumb {

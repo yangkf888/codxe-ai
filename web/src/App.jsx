@@ -382,7 +382,6 @@ function HistoryView({
       <div className="history-header">
         <div>
           <h2>历史记录</h2>
-          <p className="muted">查看最近的生成记录与视频结果。</p>
         </div>
         <button
           className="ghost"
@@ -398,7 +397,7 @@ function HistoryView({
         <p className="muted">暂无生成记录，先提交任务试试吧。</p>
       ) : (
         <div className="history-table">
-          <div className="history-row history-row-head">
+          <div className="history-table-header">
             <div>缩略图</div>
             <div>提示词</div>
             <div>状态</div>
