@@ -384,7 +384,7 @@ export default function App() {
   );
 
   return (
-    <div className="page">
+    <div className="app-layout">
       <aside className="sidebar">
         <div className="logo-block">
           <div className="logo">CODXE</div>
@@ -393,14 +393,14 @@ export default function App() {
         <nav className="nav">
           <button
             type="button"
-            className={`nav-button ${activeTab === "generate" ? "is-active" : ""}`}
+            className={`nav-item ${activeTab === "generate" ? "is-active" : ""}`}
             onClick={() => setActiveTab("generate")}
           >
             视频生成
           </button>
           <button
             type="button"
-            className={`nav-button ${activeTab === "history" ? "is-active" : ""}`}
+            className={`nav-item ${activeTab === "history" ? "is-active" : ""}`}
             onClick={() => setActiveTab("history")}
           >
             历史记录
@@ -408,7 +408,7 @@ export default function App() {
         </nav>
       </aside>
 
-      <main className="main">
+      <main className="main-content">
         <div className="token-card">
           <label htmlFor="token">访问令牌 (X-APP-TOKEN)</label>
           <input
@@ -420,17 +420,6 @@ export default function App() {
           />
           <small>仅保存在当前页面，用于访问后端接口。</small>
         </div>
-        <nav className="sidebar-nav">
-          <button type="button" className="nav-item is-active">
-            生成
-          </button>
-          <button type="button" className="nav-item">
-            历史
-          </button>
-          <button type="button" className="nav-item">
-            设置
-          </button>
-        </nav>
 
         {activeTab === "generate" ? (
           <section className="generate-view">
