@@ -5,7 +5,7 @@ const initialForm = {
   prompt: "",
   image_url: "",
   duration: "10",
-  aspect_ratio: "16:9"
+  aspect_ratio: "9:16"
 };
 
 const statusLabels = {
@@ -25,9 +25,8 @@ const durations = [
 ];
 
 const aspectRatios = [
-  { value: "16:9", label: "16:9" },
-  { value: "9:16", label: "9:16" },
-  { value: "1:1", label: "1:1" }
+  { value: "9:16", label: "竖屏 (9:16)" },
+  { value: "16:9", label: "横屏 (16:9)" }
 ];
 
 const formatProgress = (value) => {
@@ -64,6 +63,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [uploadState, setUploadState] = useState({
     status: "idle",
     message: "",
@@ -126,6 +126,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchHistory, shouldPoll]);
 
+  useEffect(() => {
+    if (!notice) {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setNotice("");
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -136,12 +146,14 @@ export default function App() {
 
   const handleCopy = async (value) => {
     if (!value) {
-      return;
+      return false;
     }
     try {
       await navigator.clipboard.writeText(value);
+      return true;
     } catch (err) {
       setError(err.message || "复制链接失败");
+      return false;
     }
   };
 
@@ -558,6 +570,32 @@ export default function App() {
                     <p className="muted">暂无可预览的视频，生成完成后会出现在这里。</p>
                   </div>
                 )}
+                <div className="preview-actions">
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() =>
+                      handleDownload(latestVideo?.video_url || latestVideo?.origin_video_url)
+                    }
+                    disabled={!latestVideo?.video_url && !latestVideo?.origin_video_url}
+                  >
+                    下载视频
+                  </button>
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={async () => {
+                      const copied = await handleCopy(latestVideo?.prompt);
+                      if (copied) {
+                        setNotice("提示词已复制");
+                      }
+                    }}
+                    disabled={!latestVideo?.prompt}
+                  >
+                    复制提示词
+                  </button>
+                </div>
+                {notice && <p className="notice">{notice}</p>}
               </div>
             </div>
           </section>
