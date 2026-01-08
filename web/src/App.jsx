@@ -55,6 +55,7 @@ const formatTimestamp = (value) => {
 export default function App() {
   const [form, setForm] = useState(initialForm);
   const [batchMode, setBatchMode] = useState(false);
+  const [batchCount, setBatchCount] = useState(1);
   const [batchPrompt, setBatchPrompt] = useState("");
   const [batchImages, setBatchImages] = useState([]);
   const [batchConcurrency, setBatchConcurrency] = useState("5");
@@ -294,6 +295,7 @@ export default function App() {
           },
           body: JSON.stringify({
             concurrency: Number(batchConcurrency) || 5,
+            batchCount,
             jobs
           })
         });
@@ -469,6 +471,22 @@ export default function App() {
                   />
                   {batchMode && <small className="helper">批量图片上传时需要填写基础提示词。</small>}
                 </div>
+
+                {batchMode && (
+                  <div className="field">
+                    <label htmlFor="batch_count">生成数量 (Batch Size)</label>
+                    <input
+                      id="batch_count"
+                      name="batch_count"
+                      type="range"
+                      min="1"
+                      max="20"
+                      value={batchCount}
+                      onChange={(event) => setBatchCount(Number(event.target.value))}
+                    />
+                    <small className="helper">当前并发: {batchCount}</small>
+                  </div>
+                )}
 
                 {batchMode && (
                   <div className="field">
