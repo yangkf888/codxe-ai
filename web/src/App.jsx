@@ -83,10 +83,20 @@ function GenerateView({
   const isQueuedOrRunning =
     previewTask && (previewTask.status === "queued" || previewTask.status === "running");
   const statusLabel = previewTask ? statusLabels[previewTask.status] || previewTask.status : "";
+  const previewProgress = useMemo(() => {
+    const actualProgress = formatProgress(previewTask?.progress);
+    if (isQueuedOrRunning) {
+      return Math.max(actualProgress ?? 0, Math.round(simulatedProgress));
+    }
+    return actualProgress;
+  }, [isQueuedOrRunning, previewTask?.progress, simulatedProgress]);
 
   return (
     <section className="generate-view">
       <div className="generate-left">
+        <div className="panel-header">
+          <h1>创作中心</h1>
+        </div>
         <form className="form form-section" onSubmit={handleSubmit}>
           <div className="field">
             <label htmlFor="mode">生成模式</label>
@@ -148,41 +158,44 @@ function GenerateView({
             </div>
           )}
 
-          <div className="grid">
-            <div className="field">
-              <label>视频时长</label>
-              <div className="segmented-control" role="group" aria-label="视频时长">
-                {durations.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`segment ${form.duration === option.value ? "is-active" : ""}`}
-                    onClick={() => setForm((prev) => ({ ...prev, duration: option.value }))}
-                    aria-pressed={form.duration === option.value}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+          <div className="field">
+            <label>视频参数</label>
+            <div className="grid">
+              <div className="field">
+                <label>视频时长</label>
+                <div className="segmented-control" role="group" aria-label="视频时长">
+                  {durations.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`segment ${form.duration === option.value ? "is-active" : ""}`}
+                      onClick={() => setForm((prev) => ({ ...prev, duration: option.value }))}
+                      aria-pressed={form.duration === option.value}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="field">
-              <label>画面比例</label>
-              <div className="segmented-control" role="group" aria-label="画面比例">
-                {aspectRatios.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`segment ${
-                      form.aspect_ratio === option.value ? "is-active" : ""
-                    }`}
-                    onClick={() =>
-                      setForm((prev) => ({ ...prev, aspect_ratio: option.value }))
-                    }
-                    aria-pressed={form.aspect_ratio === option.value}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              <div className="field">
+                <label>画面比例</label>
+                <div className="segmented-control" role="group" aria-label="画面比例">
+                  {aspectRatios.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`segment ${
+                        form.aspect_ratio === option.value ? "is-active" : ""
+                      }`}
+                      onClick={() =>
+                        setForm((prev) => ({ ...prev, aspect_ratio: option.value }))
+                      }
+                      aria-pressed={form.aspect_ratio === option.value}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -275,16 +288,16 @@ function GenerateView({
             <div className="progress-container">
               <div
                 className="progress-bar-fill"
-                style={{ width: `${simulatedProgress}%` }}
+                style={{ width: `${previewProgress ?? 0}%` }}
               ></div>
-              <span className="progress-text">{Math.floor(simulatedProgress)}%</span>
+              <span className="progress-text">{Math.floor(previewProgress ?? 0)}%</span>
             </div>
           ) : statusLabel ? (
             <p className="muted">{statusLabel}</p>
           ) : null}
           <div className="preview-actions">
             <button
-              className="preview-action"
+              className="action-btn"
               type="button"
               onClick={() => handleDownload(previewUrl)}
               disabled={!previewUrl}
@@ -292,7 +305,7 @@ function GenerateView({
               下载视频
             </button>
             <button
-              className="preview-action"
+              className="action-btn"
               type="button"
               onClick={() => handleCopyPreviewPrompt(previewPrompt)}
               disabled={!previewPrompt}
@@ -302,6 +315,130 @@ function GenerateView({
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+function HistoryView({
+  history,
+  historyLoading,
+  token,
+  fetchHistory,
+  currentTask,
+  simulatedProgress,
+  setPreviewVideo,
+  handleDownload,
+  handleCopyPrompt,
+  copiedPromptId,
+  handleDeleteTask
+}) {
+  return (
+    <section className="history-view">
+      <div className="history-header">
+        <div>
+          <h2>历史记录</h2>
+          <p className="muted">查看最近的生成记录与视频结果。</p>
+        </div>
+        <button
+          className="ghost"
+          type="button"
+          onClick={() => fetchHistory()}
+          disabled={historyLoading || !token}
+        >
+          {historyLoading ? "刷新中..." : "刷新"}
+        </button>
+      </div>
+
+      {history.length === 0 ? (
+        <p className="muted">暂无生成记录，先提交任务试试吧。</p>
+      ) : (
+        <div className="history-table">
+          <div className="history-row history-row-head">
+            <div>缩略图</div>
+            <div>提示词</div>
+            <div>状态</div>
+            <div>操作</div>
+          </div>
+          {history.map((task) => {
+            const actualProgress = formatProgress(task.progress);
+            const simulatedValue =
+              task.localTaskId === currentTask?.localTaskId
+                ? Math.round(simulatedProgress)
+                : null;
+            const progress =
+              simulatedValue !== null
+                ? Math.max(actualProgress ?? 0, simulatedValue)
+                : actualProgress;
+            const taskPreviewUrl = task.origin_video_url || task.video_url;
+            return (
+              <div key={task.localTaskId} className="history-row">
+                <div className="history-thumb">
+                  {taskPreviewUrl ? (
+                    <video src={taskPreviewUrl} muted playsInline />
+                  ) : (
+                    <div className="history-thumb-empty">暂无预览</div>
+                  )}
+                </div>
+                <div className="history-prompt">
+                  <div className="task-id">{task.localTaskId}</div>
+                  <p className="prompt">{formatPrompt(task.prompt)}</p>
+                  <div className="task-meta-line">
+                    <span>{formatTimestamp(task.createdAt)}</span>
+                    <span className="chip">{task.mode}</span>
+                  </div>
+                  {progress !== null && (
+                    <div className="progress-container history-progress">
+                      <div
+                        className="progress-bar-fill"
+                        style={{ width: `${progress}%` }}
+                      ></div>
+                      <span className="progress-text">{progress}%</span>
+                    </div>
+                  )}
+                  {task.error && <span className="error">{task.error}</span>}
+                </div>
+                <div className={`status status-${task.status}`}>
+                  {statusLabels[task.status] || task.status}
+                </div>
+                <div className="history-actions">
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => setPreviewVideo(taskPreviewUrl)}
+                    disabled={!taskPreviewUrl}
+                  >
+                    预览
+                  </button>
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => handleDownload(taskPreviewUrl)}
+                    disabled={!taskPreviewUrl}
+                  >
+                    下载视频
+                  </button>
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => handleCopyPrompt(task)}
+                    disabled={!task.prompt}
+                  >
+                    {copiedPromptId === task.localTaskId ? "✅ 已复制" : "复制提示词"}
+                  </button>
+                  <button
+                    className="btn-delete"
+                    type="button"
+                    onClick={() => handleDeleteTask(task.localTaskId)}
+                    disabled={!token}
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -317,7 +454,6 @@ export default function App() {
   const [currentTask, setCurrentTask] = useState(null);
   const [activeTab, setActiveTab] = useState("generate");
   const [previewVideo, setPreviewVideo] = useState(null);
-  const [simulatedProgress, setSimulatedProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
@@ -376,8 +512,18 @@ export default function App() {
   }, [fetchHistory]);
 
   useEffect(() => {
-    const isActiveStatus = currentTask?.status === "running" || currentTask?.status === "queued";
-    if (!isActiveStatus || simulatedProgress >= 95) {
+    const status = currentTask?.status;
+    const isActiveStatus = status === "running" || status === "queued";
+    if (!status) {
+      setSimulatedProgress(0);
+      return undefined;
+    }
+    if (status === "succeeded" || status === "success") {
+      setSimulatedProgress(100);
+      return undefined;
+    }
+    if (!isActiveStatus) {
+      setSimulatedProgress(0);
       return undefined;
     }
 
@@ -392,7 +538,7 @@ export default function App() {
     }, 500);
 
     return () => clearInterval(interval);
-  }, [currentTask?.status, simulatedProgress]);
+  }, [currentTask?.status]);
 
   useEffect(() => {
     if (!currentTask) {
@@ -470,7 +616,7 @@ export default function App() {
               }
             : prev
         );
-        if (data.status === "succeeded") {
+        if (data.status === "succeeded" || data.status === "success") {
           setSimulatedProgress(100);
         }
       } catch (err) {
@@ -750,23 +896,6 @@ export default function App() {
   const previewUrl = latestVideo?.video_url || latestVideo?.origin_video_url;
   const previewPrompt = latestVideo?.prompt;
 
-  useEffect(() => {
-    if (!previewTask || !["queued", "running"].includes(previewTask.status)) {
-      setSimulatedProgress(0);
-      return undefined;
-    }
-
-    let current = formatProgress(previewTask.progress) ?? 0;
-    setSimulatedProgress(current);
-
-    const interval = setInterval(() => {
-      current = Math.min(current + Math.random() * 4 + 1, 99);
-      setSimulatedProgress(current);
-    }, 800);
-
-    return () => clearInterval(interval);
-  }, [previewTask?.localTaskId, previewTask?.progress, previewTask?.status]);
-
   return (
     <div className="app-layout">
       <aside className="sidebar">
@@ -779,6 +908,7 @@ export default function App() {
           <input
             id="token"
             type="password"
+            className="sidebar-token"
             placeholder="请输入 APP_TOKEN"
             value={token}
             onChange={(event) => setToken(event.target.value)}
@@ -807,318 +937,50 @@ export default function App() {
         <header className="app-header">YKF-AI 视频生成平台</header>
         <main className="main-content">
           {activeTab === "generate" ? (
-            <section className="generate-view">
-              <div className="generate-left">
-                <form className="form form-section" onSubmit={handleSubmit}>
-                  <div className="field">
-                    <label htmlFor="mode">生成模式</label>
-                    <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
-                      <option value="t2v">文生视频</option>
-                      <option value="i2v">图生视频</option>
-                    </select>
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor="prompt">提示词</label>
-                    <textarea
-                      id="prompt"
-                      name="prompt"
-                      rows="4"
-                      placeholder="描述你想生成的视频内容，例如：可爱的小狗在海边奔跑"
-                      value={form.prompt}
-                      onChange={handleChange}
-                    />
-                  </div>
-
-                {form.mode === "i2v" && (
-                  <div className="field">
-                    <label htmlFor="image_upload">参考图上传</label>
-                    <div className="upload">
-                      <input
-                        id="image_upload"
-                        name="image_upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleUpload}
-                        disabled={uploadState.status === "uploading"}
-                        ref={imageUploadRef}
-                        className="upload-input"
-                      />
-                      {form.image_url ? (
-                        <div className="image-preview">
-                          <img src={form.image_url} alt="上传预览" />
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() => imageUploadRef.current?.click()}
-                            disabled={uploadState.status === "uploading"}
-                          >
-                            更换图片
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="upload-dropzone"
-                          onClick={() => imageUploadRef.current?.click()}
-                          disabled={uploadState.status === "uploading"}
-                        >
-                          点击上传图片
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                  <div className="grid">
-                    <div className="field">
-                      <label>视频时长</label>
-                      <div className="segmented-control" role="group" aria-label="视频时长">
-                        {durations.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={`segment ${
-                              form.duration === option.value ? "is-active" : ""
-                            }`}
-                            onClick={() =>
-                              setForm((prev) => ({ ...prev, duration: option.value }))
-                            }
-                            aria-pressed={form.duration === option.value}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="field">
-                      <label>画面比例</label>
-                      <div className="segmented-control" role="group" aria-label="画面比例">
-                        {aspectRatios.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={`segment ${
-                              form.aspect_ratio === option.value ? "is-active" : ""
-                            }`}
-                            onClick={() =>
-                              setForm((prev) => ({ ...prev, aspect_ratio: option.value }))
-                            }
-                            aria-pressed={form.aspect_ratio === option.value}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="batch-toggle">
-                    <div>
-                      <span className="toggle-title">批量模式</span>
-                    </div>
-                    <label className="switch">
-                      <input
-                        type="checkbox"
-                        checked={batchMode}
-                        onChange={(event) => setBatchMode(event.target.checked)}
-                      />
-                      <span className="slider" />
-                    </label>
-                  </div>
-
-                  {batchMode && (
-                    <div className="field">
-                      <label htmlFor="batch_count">生成数量 (Batch Size)</label>
-                      <input
-                        id="batch_count"
-                        name="batch_count"
-                        type="range"
-                        min="1"
-                        max="20"
-                        value={batchCount}
-                        onChange={(event) => setBatchCount(Number(event.target.value))}
-                      />
-                      <small className="helper">当前数量: {batchCount}</small>
-                    </div>
-                  )}
-
-                  {error && <p className="error">{error}</p>}
-
-                  {batchResult && (
-                    <div className="batch-result">
-                      <p>
-                        批量提交完成：成功 {batchResult.successCount} 条，失败{" "}
-                        {batchResult.failureCount} 条。
-                      </p>
-                      {batchResult.failureCount > 0 && (
-                        <ul>
-                          {batchResult.failures.map((failure) => (
-                            <li key={failure.index}>
-                              任务 #{failure.index + 1}: {failure.error}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-
-                  <button className="primary" type="submit" disabled={loading}>
-                    {loading
-                      ? batchMode
-                        ? "批量提交中..."
-                        : "生成中..."
-                      : batchMode
-                        ? "提交批量任务"
-                        : "立即生成"}
-                  </button>
-                </form>
-            </div>
-            <div className="generate-right">
-              <div className="preview-section">
-                <div className="preview-header">
-                  <div>
-                    <h2>视频预览</h2>
-                    <p className="muted">展示最近生成的视频结果。</p>
-                  </div>
-                  <button
-                    className="ghost"
-                    type="button"
-                    onClick={() => fetchHistory()}
-                    disabled={historyLoading || !token}
-                  >
-                    {historyLoading ? "刷新中..." : "刷新"}
-                  </button>
-                </div>
-                {latestVideo ? (
-                  <video controls src={previewUrl} className="preview-player" />
-                ) : (
-                  <div className="preview-empty">
-                    <p className="muted">暂无可预览的视频，生成完成后会出现在这里。</p>
-                  </div>
-                )}
-                <div className="preview-actions">
-                  <button
-                    className="preview-action primary"
-                    type="button"
-                    onClick={() => handleDownload(previewUrl)}
-                    disabled={!previewUrl}
-                  >
-                    下载视频
-                  </button>
-                  <button
-                    className="preview-action primary"
-                    type="button"
-                    onClick={() => handleCopyPreviewPrompt(previewPrompt)}
-                    disabled={!previewPrompt}
-                  >
-                    {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : (
-          <section className="history-view">
-            <div className="history-header">
-              <div>
-                <h2>历史记录</h2>
-                <p className="muted">查看最近的生成记录与视频结果。</p>
-              </div>
-              <button
-                className="ghost"
-                type="button"
-                onClick={() => fetchHistory()}
-                disabled={historyLoading || !token}
-              >
-                {historyLoading ? "刷新中..." : "刷新"}
-              </button>
-            </div>
-
-            {history.length === 0 ? (
-              <p className="muted">暂无生成记录，先提交任务试试吧。</p>
-            ) : (
-              <div className="history-table">
-                <div className="history-row history-row-head">
-                  <div>缩略图</div>
-                  <div>提示词</div>
-                  <div>状态</div>
-                  <div>操作</div>
-                </div>
-                {history.map((task) => {
-                  const actualProgress = formatProgress(task.progress);
-                  const simulatedValue =
-                    task.localTaskId === currentTask?.localTaskId
-                      ? Math.round(simulatedProgress)
-                      : null;
-                  const progress =
-                    simulatedValue !== null
-                      ? Math.max(actualProgress ?? 0, simulatedValue)
-                      : actualProgress;
-                  const taskPreviewUrl = task.origin_video_url || task.video_url;
-                  return (
-                    <div key={task.localTaskId} className="history-row">
-                      <div className="history-thumb">
-                        {taskPreviewUrl ? (
-                          <video src={taskPreviewUrl} muted playsInline />
-                        ) : (
-                          <div className="history-thumb-empty">暂无预览</div>
-                        )}
-                      </div>
-                      <div className="history-prompt">
-                        <div className="task-id">{task.localTaskId}</div>
-                        <p className="prompt">{formatPrompt(task.prompt)}</p>
-                        <div className="task-meta-line">
-                          <span>{formatTimestamp(task.createdAt)}</span>
-                          <span className="chip">{task.mode}</span>
-                          {progress !== null && <span>进度 {progress}%</span>}
-                          {task.error && <span className="error">{task.error}</span>}
-                        </div>
-                      </div>
-                      <div className={`status status-${task.status}`}>
-                        {statusLabels[task.status] || task.status}
-                      </div>
-                      <div className="history-actions">
-                        <button
-                          className="secondary"
-                          type="button"
-                          onClick={() => setPreviewVideo(taskPreviewUrl)}
-                          disabled={!taskPreviewUrl}
-                        >
-                          预览
-                        </button>
-                        <button
-                          className="secondary"
-                          type="button"
-                          onClick={() => handleDownload(taskPreviewUrl)}
-                          disabled={!taskPreviewUrl}
-                        >
-                          下载视频
-                        </button>
-                        <button
-                          className="secondary"
-                          type="button"
-                          onClick={() => handleCopyPrompt(task)}
-                          disabled={!task.prompt}
-                        >
-                          {copiedPromptId === task.localTaskId ? "✅ 已复制" : "复制提示词"}
-                        </button>
-                        <button
-                          className="btn-delete"
-                          type="button"
-                          onClick={() => handleDeleteTask(task.localTaskId)}
-                          disabled={!token}
-                        >
-                          删除
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        )}
+            <GenerateView
+              form={form}
+              handleSubmit={handleSubmit}
+              handleChange={handleChange}
+              handleUpload={handleUpload}
+              uploadState={uploadState}
+              imageUploadRef={imageUploadRef}
+              durations={durations}
+              aspectRatios={aspectRatios}
+              setForm={setForm}
+              batchMode={batchMode}
+              setBatchMode={setBatchMode}
+              batchCount={batchCount}
+              setBatchCount={setBatchCount}
+              error={error}
+              batchResult={batchResult}
+              loading={loading}
+              latestVideo={latestVideo}
+              previewUrl={previewUrl}
+              previewPrompt={previewPrompt}
+              handleDownload={handleDownload}
+              handleCopyPreviewPrompt={handleCopyPreviewPrompt}
+              copiedPreviewPrompt={copiedPreviewPrompt}
+              historyLoading={historyLoading}
+              token={token}
+              fetchHistory={fetchHistory}
+              previewTask={previewTask}
+              simulatedProgress={simulatedProgress}
+            />
+          ) : (
+            <HistoryView
+              history={history}
+              historyLoading={historyLoading}
+              token={token}
+              fetchHistory={fetchHistory}
+              currentTask={currentTask}
+              simulatedProgress={simulatedProgress}
+              setPreviewVideo={setPreviewVideo}
+              handleDownload={handleDownload}
+              handleCopyPrompt={handleCopyPrompt}
+              copiedPromptId={copiedPromptId}
+              handleDeleteTask={handleDeleteTask}
+            />
+          )}
         </main>
       </div>
 
