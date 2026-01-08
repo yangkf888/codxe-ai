@@ -51,6 +51,41 @@ const formatTimestamp = (value) => {
   return date.toLocaleString();
 };
 
+function SimulatedProgressRow({ status, isHistory }) {
+  const [percent, setPercent] = useState(0);
+
+  useEffect(() => {
+    let intervalId;
+
+    if (status === "running" || status === "queued") {
+      intervalId = setInterval(() => {
+        setPercent((prev) => {
+          const increment = Math.floor(Math.random() * 3) + 1;
+          return Math.min(95, prev + increment);
+        });
+      }, 500);
+    }
+
+    if (status === "succeeded") {
+      setPercent(100);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [status]);
+
+  return (
+    <div className="history-progress-wrapper">
+      <div className="history-progress-track">
+        <div className="history-progress-fill" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function GenerateView({
   form,
   handleSubmit,
@@ -324,8 +359,6 @@ function HistoryView({
   historyLoading,
   token,
   fetchHistory,
-  currentTask,
-  simulatedProgress,
   setPreviewVideo,
   handleDownload,
   handleCopyPrompt,
@@ -360,15 +393,6 @@ function HistoryView({
             <div>操作</div>
           </div>
           {history.map((task) => {
-            const actualProgress = formatProgress(task.progress);
-            const simulatedValue =
-              task.localTaskId === currentTask?.localTaskId
-                ? Math.round(simulatedProgress)
-                : null;
-            const progress =
-              simulatedValue !== null
-                ? Math.max(actualProgress ?? 0, simulatedValue)
-                : actualProgress;
             const taskPreviewUrl = task.origin_video_url || task.video_url;
             return (
               <div key={task.localTaskId} className="history-row">
@@ -386,15 +410,7 @@ function HistoryView({
                     <span>{formatTimestamp(task.createdAt)}</span>
                     <span className="chip">{task.mode}</span>
                   </div>
-                  {progress !== null && (
-                    <div className="progress-container history-progress">
-                      <div
-                        className="progress-bar-fill"
-                        style={{ width: `${progress}%` }}
-                      ></div>
-                      <span className="progress-text">{progress}%</span>
-                    </div>
-                  )}
+                  <SimulatedProgressRow status={task.status} />
                   {task.error && <span className="error">{task.error}</span>}
                 </div>
                 <div className={`status status-${task.status}`}>
@@ -972,8 +988,6 @@ export default function App() {
               historyLoading={historyLoading}
               token={token}
               fetchHistory={fetchHistory}
-              currentTask={currentTask}
-              simulatedProgress={simulatedProgress}
               setPreviewVideo={setPreviewVideo}
               handleDownload={handleDownload}
               handleCopyPrompt={handleCopyPrompt}
