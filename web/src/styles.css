@@ -90,13 +90,26 @@ button {
   box-shadow: 0 12px 24px rgba(99, 102, 241, 0.35);
 }
 
+.main-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  padding: 24px 40px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
 .main-content {
-  padding: 32px 40px 40px;
+  padding: 20px 40px 40px;
   display: flex;
   flex-direction: column;
   gap: 24px;
   overflow-y: auto;
-  height: 100vh;
+  height: 100%;
 }
 
 .token-card {
@@ -783,6 +796,8 @@ select {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
   }
 
   .nav {
@@ -793,6 +808,14 @@ select {
   .main-content {
     height: auto;
     overflow: visible;
+  }
+
+  .sidebar .token-card {
+    width: 100%;
+  }
+
+  .app-header {
+    padding: 20px 20px 0;
   }
 
   .generate-view {
