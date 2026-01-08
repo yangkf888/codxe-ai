@@ -420,6 +420,17 @@ export default function App() {
           />
           <small>仅保存在当前页面，用于访问后端接口。</small>
         </div>
+        <nav className="sidebar-nav">
+          <button type="button" className="nav-item is-active">
+            生成
+          </button>
+          <button type="button" className="nav-item">
+            历史
+          </button>
+          <button type="button" className="nav-item">
+            设置
+          </button>
+        </nav>
 
         {activeTab === "generate" ? (
           <section className="generate-view">
