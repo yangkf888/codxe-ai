@@ -224,6 +224,7 @@ const createOne = async (job = {}) => {
     aspect_ratio = "16:9",
     character_id_list
   } = job;
+  const remove_watermark = true;
 
   if (!mode || !prompt) {
     throw new ApiError(400, "Missing required fields");
