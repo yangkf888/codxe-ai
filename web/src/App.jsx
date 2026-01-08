@@ -5,7 +5,7 @@ const initialForm = {
   prompt: "",
   image_url: "",
   duration: "10",
-  aspect_ratio: "16:9"
+  aspect_ratio: "9:16"
 };
 
 const statusLabels = {
@@ -25,9 +25,8 @@ const durations = [
 ];
 
 const aspectRatios = [
-  { value: "16:9", label: "16:9" },
-  { value: "9:16", label: "9:16" },
-  { value: "1:1", label: "1:1" }
+  { value: "9:16", label: "竖屏 (9:16)" },
+  { value: "16:9", label: "横屏 (16:9)" }
 ];
 
 const formatProgress = (value) => {
@@ -64,12 +63,14 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
+  const [copiedPromptId, setCopiedPromptId] = useState(null);
   const [uploadState, setUploadState] = useState({
     status: "idle",
     message: "",
     fileName: ""
   });
   const imageUploadRef = useRef(null);
+  const copiedPromptTimeoutRef = useRef(null);
 
   const shouldPoll = useMemo(
     () => history.some((task) => !terminalStatuses.has(task.status)),
@@ -115,6 +116,14 @@ export default function App() {
   }, [fetchHistory]);
 
   useEffect(() => {
+    return () => {
+      if (copiedPromptTimeoutRef.current) {
+        clearTimeout(copiedPromptTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!shouldPoll) {
       return undefined;
     }
@@ -126,6 +135,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchHistory, shouldPoll]);
 
+  useEffect(() => {
+    if (!notice) {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setNotice("");
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -136,12 +155,51 @@ export default function App() {
 
   const handleCopy = async (value) => {
     if (!value) {
-      return;
+      return false;
     }
     try {
       await navigator.clipboard.writeText(value);
+      return true;
     } catch (err) {
       setError(err.message || "复制链接失败");
+      return false;
+    }
+  };
+
+  const handleCopyPrompt = async (task) => {
+    if (!task?.prompt) {
+      return;
+    }
+    await handleCopy(task.prompt);
+    setCopiedPromptId(task.localTaskId);
+    if (copiedPromptTimeoutRef.current) {
+      clearTimeout(copiedPromptTimeoutRef.current);
+    }
+    copiedPromptTimeoutRef.current = setTimeout(() => {
+      setCopiedPromptId(null);
+    }, 2000);
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!taskId || !token) {
+      return;
+    }
+    if (!window.confirm("确定要删除这条记录吗？")) {
+      return;
+    }
+    setError("");
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: { "X-APP-TOKEN": token }
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "删除失败");
+      }
+      await fetchHistory();
+    } catch (err) {
+      setError(err.message || "删除失败");
     }
   };
 
@@ -656,10 +714,18 @@ export default function App() {
                         <button
                           className="secondary"
                           type="button"
-                          onClick={() => handleCopy(task.prompt)}
+                          onClick={() => handleCopyPrompt(task)}
                           disabled={!task.prompt}
                         >
-                          复制提示词
+                          {copiedPromptId === task.localTaskId ? "✅ 已复制" : "复制提示词"}
+                        </button>
+                        <button
+                          className="danger"
+                          type="button"
+                          onClick={() => handleDeleteTask(task.localTaskId)}
+                          disabled={!token}
+                        >
+                          删除
                         </button>
                       </div>
                     </div>
