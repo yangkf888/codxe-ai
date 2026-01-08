@@ -175,8 +175,8 @@ const aspectRatioMap = {
 
 const frameMap = {
   5: "10",
-  10: "20",
-  15: "30"
+  10: "10",
+  15: "15"
 };
 
 const upload = multer({

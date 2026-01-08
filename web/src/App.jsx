@@ -4,7 +4,7 @@ const initialForm = {
   mode: "t2v",
   prompt: "",
   image_url: "",
-  duration: "5",
+  duration: "10",
   aspect_ratio: "16:9"
 };
 
@@ -500,7 +500,6 @@ export default function App() {
               <div className="field">
                 <label htmlFor="duration">Duration (sec)</label>
                 <select id="duration" name="duration" value={form.duration} onChange={handleChange}>
-                  <option value="5">5</option>
                   <option value="10">10</option>
                   <option value="15">15</option>
                 </select>
