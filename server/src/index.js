@@ -2,6 +2,9 @@ import dotenv from "dotenv";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import pLimit from "p-limit";
+import multer from "multer";
+import axios from "axios";
+import FormData from "form-data";
 import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
@@ -170,6 +173,8 @@ const frameMap = {
   10: "20",
   15: "30"
 };
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 class ApiError extends Error {
   constructor(statusCode, message) {
@@ -365,6 +370,63 @@ app.post("/api/video/batch_create", limiter, async (req, res) => {
     concurrency: normalizedConcurrency,
     results
   });
+});
+
+app.post("/api/upload", limiter, upload.single("file"), async (req, res) => {
+  try {
+    if (!KIE_API_KEY) {
+      return res.status(500).json({ ok: false, error: "KIE_API_KEY is not set" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ ok: false, error: "file is required" });
+    }
+
+    const formData = new FormData();
+    formData.append("file", req.file.buffer, {
+      filename: req.file.originalname || "upload",
+      contentType: req.file.mimetype
+    });
+    formData.append("uploadPath", "ai-video-uploads");
+
+    const fileName = req.body?.fileName;
+    if (fileName) {
+      formData.append("fileName", fileName);
+    }
+
+    const response = await axios.post(
+      "https://kieai.redpandaai.co/api/file-stream-upload",
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders(),
+          Authorization: `Bearer ${KIE_API_KEY}`
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        validateStatus: () => true
+      }
+    );
+
+    if (response.status < 200 || response.status >= 300) {
+      const message =
+        response.data?.msg ||
+        response.data?.message ||
+        `Upload failed with status ${response.status}`;
+      return res.status(502).json({ ok: false, error: message });
+    }
+
+    const fileUrl = response.data?.fileUrl;
+    if (!fileUrl) {
+      return res.status(502).json({ ok: false, error: "Upload response missing fileUrl" });
+    }
+
+    return res.json({ ok: true, fileUrl });
+  } catch (error) {
+    const message =
+      error.response?.data?.msg || error.response?.data?.message || error.message || "Upload failed";
+    return res.status(500).json({ ok: false, error: message });
+  }
 });
 
 app.get("/api/video/status", async (req, res) => {

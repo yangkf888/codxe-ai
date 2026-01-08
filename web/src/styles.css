@@ -152,6 +152,11 @@ h1 {
   gap: 6px;
 }
 
+.upload {
+  display: grid;
+  gap: 4px;
+}
+
 label {
   font-weight: 600;
 }
@@ -297,6 +302,24 @@ textarea {
 .error {
   color: #dc2626;
   font-weight: 600;
+}
+
+.upload-status {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.upload-uploading {
+  color: #0ea5e9;
+}
+
+.upload-success {
+  color: #16a34a;
+}
+
+.upload-error {
+  color: #dc2626;
 }
 
 .muted {

@@ -53,6 +53,11 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadState, setUploadState] = useState({
+    status: "idle",
+    message: "",
+    fileName: ""
+  });
 
   const shouldPoll = useMemo(
     () => history.some((task) => !terminalStatuses.has(task.status)),
@@ -106,6 +111,9 @@ export default function App() {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (name === "image_url") {
+      setUploadState({ status: "idle", message: "", fileName: "" });
+    }
   };
 
   const handleCopy = async (value) => {
@@ -405,7 +413,27 @@ export default function App() {
                   placeholder="https://example.com/image.jpg"
                   value={form.image_url}
                   onChange={handleChange}
+                  disabled={uploadState.status === "uploading"}
                 />
+                <div className="upload">
+                  <input
+                    id="image_upload"
+                    name="image_upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUpload}
+                    disabled={uploadState.status === "uploading"}
+                  />
+                  <label className="muted" htmlFor="image_upload">
+                    Upload an image instead of pasting a URL.
+                  </label>
+                </div>
+                {uploadState.status !== "idle" && (
+                  <p className={`upload-status upload-${uploadState.status}`}>
+                    {uploadState.message}
+                    {uploadState.fileName ? ` (${uploadState.fileName})` : ""}
+                  </p>
+                )}
               </div>
             )}
             <div className="grid">
