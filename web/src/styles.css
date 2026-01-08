@@ -400,7 +400,7 @@ select {
 }
 
 .primary {
-  background: #6366f1;
+  background: #3b82f6;
   color: #f8fafc;
   padding: 12px 16px;
   border: none;
@@ -523,19 +523,21 @@ select {
   flex: 1 1 0;
   min-width: 120px;
   text-align: center;
-  border: 1px solid #334155;
-  background: #0f172a;
   padding: 10px 12px;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 13px;
-  color: #e2e8f0;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-.preview-action:hover {
-  background: #1e293b;
-  border-color: #475569;
+.preview-action.primary {
+  background: #3b82f6;
+  color: #ffffff;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 13px;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.preview-action.primary:hover {
+  background: #2563eb;
+  box-shadow: 0 12px 24px rgba(59, 130, 246, 0.35);
 }
 
 .preview-action:disabled {
@@ -600,6 +602,28 @@ select {
 .status-success,
 .status-succeeded {
   color: #4ade80;
+}
+
+.progress-container {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #cbd5f5;
+  font-weight: 600;
 }
 
 .status-fail,

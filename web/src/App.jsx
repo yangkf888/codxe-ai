@@ -625,7 +625,7 @@ export default function App() {
                 )}
                 <div className="preview-actions">
                   <button
-                    className="preview-action"
+                    className="preview-action primary"
                     type="button"
                     onClick={() => handleDownload(previewUrl)}
                     disabled={!previewUrl}
@@ -633,7 +633,7 @@ export default function App() {
                     下载视频
                   </button>
                   <button
-                    className="preview-action"
+                    className="preview-action primary"
                     type="button"
                     onClick={() => handleCopyPreviewPrompt(previewPrompt)}
                     disabled={!previewPrompt}
