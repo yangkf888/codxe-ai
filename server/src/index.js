@@ -573,7 +573,7 @@ app.delete("/api/tasks/:id", async (req, res) => {
   }
 
   await multi.exec();
-  return res.json({ success: true });
+  return res.json({ success: true, id: localTaskId });
 });
 
 app.post("/api/callback", async (req, res) => {
