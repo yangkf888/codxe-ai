@@ -441,6 +441,19 @@ select {
   text-align: center;
 }
 
+.preview-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.notice {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4ade80;
+}
+
 .batch-result {
   border-radius: 12px;
   background: #111827;
