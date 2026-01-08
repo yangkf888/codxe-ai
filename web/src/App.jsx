@@ -387,7 +387,7 @@ export default function App() {
     <div className="app-layout">
       <aside className="sidebar">
         <div className="logo-block">
-          <div className="logo">CODXE</div>
+          <div className="logo">YKF-AI</div>
           <p className="logo-subtitle">AI 视频生成平台</p>
         </div>
         <nav className="nav">
