@@ -167,6 +167,7 @@ export default function App() {
     try {
       const response = await fetch("/api/upload", {
         method: "POST",
+        headers: token ? { "X-APP-TOKEN": token } : {},
         body: formData
       });
       if (!response.ok) {
