@@ -176,7 +176,7 @@ export default function App() {
         throw new Error(data.error || "Failed to upload image");
       }
       const data = await response.json();
-      const fileUrl = data.fileUrl;
+      const fileUrl = data?.data?.fileUrl ?? data?.fileUrl;
       if (!fileUrl) {
         throw new Error("Upload response missing fileUrl");
       }
