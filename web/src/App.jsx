@@ -429,7 +429,7 @@ export default function App() {
                 <h1>AI 视频创作工作台</h1>
                 <p className="subtitle">输入提示词，选择时长与画面比例，快速生成 AI 视频。</p>
               </header>
-              <form className="form" onSubmit={handleSubmit}>
+              <form className="form form-section" onSubmit={handleSubmit}>
                 <div className="batch-toggle">
                   <div>
                     <span className="toggle-title">批量模式</span>
