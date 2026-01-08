@@ -397,6 +397,21 @@ select {
   cursor: not-allowed;
 }
 
+.danger {
+  border: 1px solid #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #fecaca;
+}
+
+.danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .preview-card {
   padding: 20px;
   border-radius: 16px;
