@@ -554,6 +554,28 @@ app.get("/api/video/list", async (req, res) => {
   return res.json({ tasks });
 });
 
+app.delete("/api/tasks/:id", async (req, res) => {
+  const localTaskId = req.params.id;
+  if (!localTaskId) {
+    return res.status(400).json({ error: "Task id is required" });
+  }
+
+  const task = await getTask(localTaskId);
+  if (!task) {
+    return res.status(404).json({ error: "Task not found" });
+  }
+
+  const multi = redisClient.multi();
+  multi.del(taskKey(localTaskId));
+  multi.zRem(recentKey, localTaskId);
+  if (task.kieTaskId) {
+    multi.del(mapKey(task.kieTaskId));
+  }
+
+  await multi.exec();
+  return res.json({ success: true });
+});
+
 app.post("/api/callback", async (req, res) => {
   const kieTaskId = req.body?.data?.taskId;
   const state = req.body?.data?.state;
