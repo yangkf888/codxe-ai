@@ -40,6 +40,19 @@ const formatProgress = (value) => {
 
 const formatPrompt = (prompt) => prompt || "(无提示词)";
 
+const getSimulatedProgressNext = (prev) => {
+  if (prev >= 95) {
+    return 95;
+  }
+  let increment = Math.random() * 0.2;
+  if (prev < 30) {
+    increment = Math.random() * 1.5;
+  } else if (prev < 70) {
+    increment = Math.random() * 0.4;
+  }
+  return Math.min(prev + increment, 95);
+};
+
 const formatTimestamp = (value) => {
   if (!value) {
     return "";
@@ -60,10 +73,9 @@ function SimulatedProgressRow({ status, isHistory }) {
     if (status === "running" || status === "queued") {
       intervalId = setInterval(() => {
         setPercent((prev) => {
-          const increment = Math.floor(Math.random() * 3) + 1;
-          return Math.min(95, prev + increment);
+          return getSimulatedProgressNext(prev);
         });
-      }, 500);
+      }, 1000);
     }
 
     if (status === "succeeded") {
@@ -545,13 +557,9 @@ export default function App() {
 
     const interval = setInterval(() => {
       setSimulatedProgress((prev) => {
-        if (prev >= 95) {
-          return prev;
-        }
-        const increment = 1 + Math.random();
-        return Math.min(prev + increment, 95);
+        return getSimulatedProgressNext(prev);
       });
-    }, 500);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [currentTask?.status]);
