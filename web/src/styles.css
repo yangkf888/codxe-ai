@@ -113,13 +113,18 @@ button {
   border: 1px solid transparent;
   border-radius: 10px;
   padding: 10px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .generate-view {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(280px, 420px);
+  grid-template-columns: 300px 1fr;
   gap: 24px;
   align-items: start;
+  max-width: 100%;
+  height: 100%;
 }
 
 .generate-left,
@@ -150,6 +155,11 @@ button {
 .form {
   display: grid;
   gap: 16px;
+}
+
+.form-section {
+  padding: 16px;
+  gap: 12px;
 }
 
 .field {
@@ -318,7 +328,7 @@ select {
 
 .segmented-control {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   background: #0f172a;
   border: 1px solid #334155;
   border-radius: 12px;
@@ -328,11 +338,12 @@ select {
 .segment {
   flex: 1;
   background: transparent;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #94a3b8;
+  min-width: 0;
 }
 
 .segment.is-active {
