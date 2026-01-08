@@ -152,6 +152,43 @@ export default function App() {
     }
   };
 
+  const handleUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setUploadState({ status: "idle", message: "", fileName: "" });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    setUploadState({ status: "uploading", message: "Uploading...", fileName: file.name });
+    setError("");
+
+    try {
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to upload image");
+      }
+      const data = await response.json();
+      const fileUrl = data.fileUrl;
+      if (!fileUrl) {
+        throw new Error("Upload response missing fileUrl");
+      }
+      setForm((prev) => ({ ...prev, image_url: fileUrl }));
+      setUploadState({ status: "success", message: "Upload complete", fileName: file.name });
+      setError("");
+    } catch (err) {
+      setError(err.message || "Failed to upload image");
+      setUploadState({ status: "error", message: "Upload failed", fileName: file.name });
+    } finally {
+      event.target.value = "";
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
