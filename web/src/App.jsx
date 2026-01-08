@@ -56,9 +56,6 @@ export default function App() {
   const [form, setForm] = useState(initialForm);
   const [batchMode, setBatchMode] = useState(false);
   const [batchCount, setBatchCount] = useState(1);
-  const [batchPrompt, setBatchPrompt] = useState("");
-  const [batchImages, setBatchImages] = useState([]);
-  const [batchConcurrency, setBatchConcurrency] = useState("5");
   const [batchResult, setBatchResult] = useState(null);
   const [token, setToken] = useState("");
   const [history, setHistory] = useState([]);
@@ -161,31 +158,6 @@ export default function App() {
     link.remove();
   };
 
-  const handleBatchImageChange = async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (files.length === 0) {
-      setBatchImages([]);
-      return;
-    }
-
-    try {
-      const dataUrls = await Promise.all(
-        files.map(
-          (file) =>
-            new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve({ name: file.name, dataUrl: reader.result });
-              reader.onerror = () => reject(new Error(`读取 ${file.name} 失败`));
-              reader.readAsDataURL(file);
-            })
-        )
-      );
-      setBatchImages(dataUrls);
-    } catch (err) {
-      setError(err.message || "加载批量图片失败。");
-    }
-  };
-
   const handleUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -232,12 +204,12 @@ export default function App() {
     setError("");
     setBatchResult(null);
 
-    if (!batchMode && !form.prompt.trim()) {
+    if (!form.prompt.trim()) {
       setError("请输入提示词。");
       return;
     }
 
-    if (!batchMode && form.mode === "i2v" && !form.image_url.trim()) {
+    if (form.mode === "i2v" && !form.image_url.trim()) {
       setError("图生视频模式需要上传图片。");
       return;
     }
@@ -246,46 +218,13 @@ export default function App() {
 
     try {
       if (batchMode) {
-        const trimmedPrompts = batchPrompt
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean);
-        const hasBatchImages = batchImages.length > 0;
-
-        if (!hasBatchImages && trimmedPrompts.length === 0) {
-          setError("批量模式请提供提示词或上传图片。");
-          return;
-        }
-
-        if (hasBatchImages && form.mode !== "i2v") {
-          setError("批量图片上传仅支持图生视频模式。");
-          return;
-        }
-
-        if (hasBatchImages && !form.prompt.trim()) {
-          setError("批量图片提交时需要填写基础提示词。");
-          return;
-        }
-
-        if (!hasBatchImages && form.mode === "i2v") {
-          setError("批量提示词模式暂时仅支持文生视频。");
-          return;
-        }
-
-        const jobs = hasBatchImages
-          ? batchImages.map((image) => ({
-              mode: "i2v",
-              prompt: form.prompt.trim(),
-              image_url: image.dataUrl,
-              duration: Number(form.duration),
-              aspect_ratio: form.aspect_ratio
-            }))
-          : trimmedPrompts.map((prompt) => ({
-              mode: "t2v",
-              prompt,
-              duration: Number(form.duration),
-              aspect_ratio: form.aspect_ratio
-            }));
+        const jobs = Array.from({ length: batchCount }, () => ({
+          mode: form.mode,
+          prompt: form.prompt.trim(),
+          image_url: form.mode === "i2v" ? form.image_url : undefined,
+          duration: Number(form.duration),
+          aspect_ratio: form.aspect_ratio
+        }));
 
         const response = await fetch("/api/video/batch_create", {
           method: "POST",
@@ -294,7 +233,6 @@ export default function App() {
             ...(token ? { "X-APP-TOKEN": token } : {})
           },
           body: JSON.stringify({
-            concurrency: Number(batchConcurrency) || 5,
             batchCount,
             jobs
           })
@@ -435,7 +373,6 @@ export default function App() {
                 <div className="batch-toggle">
                   <div>
                     <span className="toggle-title">批量模式</span>
-                    <p className="muted">一次提交多条提示词或多张图片。</p>
                   </div>
                   <label className="switch">
                     <input
@@ -456,78 +393,18 @@ export default function App() {
                 </div>
 
                 <div className="field">
-                  <label htmlFor="prompt">{batchMode ? "基础提示词" : "提示词 (Prompt)"}</label>
+                  <label htmlFor="prompt">提示词 (Prompt)</label>
                   <textarea
                     id="prompt"
                     name="prompt"
                     rows="4"
-                    placeholder={
-                      batchMode
-                        ? "批量图片模式下，将使用这一段提示词。"
-                        : "描述你想生成的视频内容，例如：可爱的小狗在海边奔跑"
-                    }
+                    placeholder="描述你想生成的视频内容，例如：可爱的小狗在海边奔跑"
                     value={form.prompt}
                     onChange={handleChange}
                   />
-                  {batchMode && <small className="helper">批量图片上传时需要填写基础提示词。</small>}
                 </div>
 
-                {batchMode && (
-                  <div className="field">
-                    <label htmlFor="batch_count">生成数量 (Batch Size)</label>
-                    <input
-                      id="batch_count"
-                      name="batch_count"
-                      type="range"
-                      min="1"
-                      max="20"
-                      value={batchCount}
-                      onChange={(event) => setBatchCount(Number(event.target.value))}
-                    />
-                    <small className="helper">当前并发: {batchCount}</small>
-                  </div>
-                )}
-
-                {batchMode && (
-                  <div className="field">
-                    <label htmlFor="batch_prompt">批量提示词（每行一条）</label>
-                    <textarea
-                      id="batch_prompt"
-                      name="batch_prompt"
-                      rows="5"
-                      placeholder="提示词 1\n提示词 2\n提示词 3"
-                      value={batchPrompt}
-                      onChange={(event) => setBatchPrompt(event.target.value)}
-                    />
-                    <small className="helper">每一行都会生成一条独立任务。</small>
-                  </div>
-                )}
-
-                {batchMode && form.mode === "i2v" && (
-                  <div className="field">
-                    <label htmlFor="batch_images">批量图片上传</label>
-                    <input
-                      id="batch_images"
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleBatchImageChange}
-                    />
-                    {batchImages.length > 0 ? (
-                      <div className="file-list">
-                        {batchImages.map((image, index) => (
-                          <span key={`${image.name}-${index}`} className="file-chip">
-                            {image.name}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <small className="helper">上传多张图片，每张图片生成一条任务。</small>
-                    )}
-                  </div>
-                )}
-
-                {!batchMode && form.mode === "i2v" && (
+                {form.mode === "i2v" && (
                   <div className="field">
                     <label htmlFor="image_upload">参考图上传</label>
                     <div className="upload">
@@ -573,6 +450,22 @@ export default function App() {
                   </div>
                 )}
 
+                {batchMode && (
+                  <div className="field">
+                    <label htmlFor="batch_count">生成数量 (Batch Size)</label>
+                    <input
+                      id="batch_count"
+                      name="batch_count"
+                      type="range"
+                      min="1"
+                      max="20"
+                      value={batchCount}
+                      onChange={(event) => setBatchCount(Number(event.target.value))}
+                    />
+                    <small className="helper">当前并发: {batchCount}</small>
+                  </div>
+                )}
+
                 <div className="grid">
                   <div className="field">
                     <label>视频时长</label>
@@ -607,22 +500,6 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-
-                {batchMode && (
-                  <div className="field">
-                    <label htmlFor="concurrency">并发数量</label>
-                    <input
-                      id="concurrency"
-                      name="concurrency"
-                      type="number"
-                      min="1"
-                      max="30"
-                      value={batchConcurrency}
-                      onChange={(event) => setBatchConcurrency(event.target.value)}
-                    />
-                    <small className="helper">默认 5，可根据需要调整提交并发。</small>
-                  </div>
-                )}
 
                 {error && <p className="error">{error}</p>}
 
