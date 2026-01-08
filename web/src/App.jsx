@@ -72,7 +72,7 @@ export default function App() {
       }
       try {
         const response = await fetch("/api/video/list?limit=50", {
-          headers: token ? { "X-APP-TOKEN": token } : {}
+          headers: { "X-APP-TOKEN": token }
         });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));

@@ -441,7 +441,8 @@ app.post("/api/upload", limiter, upload.single("file"), async (req, res) => {
       return res.status(502).json({ ok: false, error: message });
     }
 
-    const fileUrl = response.data?.fileUrl;
+    const responseBody = response.data || {};
+    const fileUrl = responseBody.data?.fileUrl || responseBody.fileUrl;
     if (!fileUrl) {
       responseSent = true;
       return res.status(502).json({ ok: false, error: "Upload response missing fileUrl" });
