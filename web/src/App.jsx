@@ -436,8 +436,7 @@ export default function App() {
             <div className="generate-left">
               <header className="panel-header">
                 <p className="eyebrow">AI 视频创作工作台</p>
-                <h1>AI 视频创作工作台</h1>
-                <p className="subtitle">输入提示词，选择时长与画面比例，快速生成 AI 视频。</p>
+                <h1>创作中心</h1>
               </header>
               <form className="form form-section" onSubmit={handleSubmit}>
                 <div className="batch-toggle">
