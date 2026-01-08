@@ -102,10 +102,16 @@ button {
   border-bottom: 1px solid #334155;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 24px;
   font-size: 20px;
   font-weight: 700;
   color: #f8fafc;
+}
+
+.logout-button {
+  font-size: 13px;
+  padding: 6px 12px;
 }
 
 .main-content {
@@ -138,6 +144,46 @@ button {
 
 .token-card input {
   border: 1px solid transparent;
+}
+
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at top, rgba(99, 102, 241, 0.2), transparent 45%),
+    #0f172a;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  padding: 32px;
+  display: grid;
+  gap: 20px;
+  box-shadow: 0 25px 45px rgba(15, 23, 42, 0.5);
+}
+
+.login-header h1 {
+  font-size: 24px;
+  margin-top: 6px;
+}
+
+.login-header .muted {
+  margin-top: 8px;
+}
+
+.login-form {
+  display: grid;
+  gap: 16px;
+}
+
+.login-help {
+  font-size: 12px;
+  text-align: center;
 }
 
 .generate-view {

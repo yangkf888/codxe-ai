@@ -15,6 +15,8 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 8787);
 const APP_TOKEN = process.env.APP_TOKEN;
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "123456";
 const KIE_API_KEY = process.env.KIE_API_KEY;
 const KIE_BASE_URL = process.env.KIE_BASE_URL || "https://api.kie.ai";
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://your-domain.com";
@@ -386,7 +388,7 @@ app.use((req, res, next) => {
     return next();
   }
 
-  if (req.path === "/api/callback") {
+  if (req.path === "/api/callback" || req.path === "/api/login") {
     return next();
   }
 
@@ -396,6 +398,14 @@ app.use((req, res, next) => {
   }
 
   return next();
+});
+
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body || {};
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    return res.json({ success: true, token: APP_TOKEN });
+  }
+  return res.status(401).json({ success: false, error: "Unauthorized" });
 });
 
 app.post("/api/video/create", limiter, async (req, res) => {

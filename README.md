@@ -15,6 +15,7 @@
 
 - 前端不包含任何 API Key，仅调用同域 `/api`。
 - 后端持有 `KIE_API_KEY`，负责调用 Kie AI 视频生成接口。
+- 前端通过管理员账号密码登录 `/api/login` 获取访问令牌并存入本地存储。
 - `/api/video/create` 创建任务，返回 `task_id`。
 - `/api/video/batch_create` 批量创建任务并支持并发限制。
 - `/api/video/status` 轮询任务状态。
@@ -27,8 +28,30 @@
 ### Header
 
 ```
-X-APP-TOKEN: <必须匹配环境变量 APP_TOKEN，否则 401>
+X-APP-TOKEN: <登录后返回的 APP_TOKEN，否则 401>
 ```
+
+### POST /api/login
+
+请求：
+
+```json
+{
+  "username": "admin",
+  "password": "123456"
+}
+```
+
+返回：
+
+```json
+{ "success": true, "token": "APP_TOKEN" }
+```
+
+说明：
+
+- 默认管理员账号密码为 `admin / 123456`，可通过环境变量覆盖。
+- 登录成功后将 `token` 作为 `X-APP-TOKEN` 发送给后端接口。
 
 ### POST /api/video/create
 
@@ -197,7 +220,10 @@ cd /var/www/ai-video
 
 - `PUBLIC_BASE_URL`
 - `KIE_API_KEY`
-- `APP_TOKEN`
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+
+`APP_TOKEN` 将由脚本自动生成，无需手动输入。
 
 完成后自动执行 `docker-compose up -d --build`。
 
@@ -237,6 +263,8 @@ cp server/.env.example server/.env
 ```
 KIE_API_KEY=...
 APP_TOKEN=...
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=123456
 PORT=8787
 PUBLIC_BASE_URL=https://your-domain.com
 REDIS_URL=redis://127.0.0.1:6380
@@ -330,6 +358,17 @@ npm run dev
 
 ## 常用 curl 示例
 
+### 登录获取访问令牌
+
+```bash
+curl -X POST http://localhost:8787/api/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "123456"
+  }'
+```
+
 ### 创建单个任务
 
 ```bash
@@ -386,3 +425,4 @@ curl -X GET "http://localhost:8787/api/video/status?task_id=task_xxx" \
 - 不要在前端暴露 `KIE_API_KEY`。
 - `/api/callback` 放行，不需要 `X-APP-TOKEN`。
 - `FILES_DIR` 如果使用相对路径，默认是 `server/files`。
+- 前端登录后自动保存 `APP_TOKEN`，无需手动输入令牌。
