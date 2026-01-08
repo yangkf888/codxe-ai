@@ -27,7 +27,7 @@ const NORMALIZED_FILES_PATH = PUBLIC_FILES_PATH.startsWith("/")
   : `/${PUBLIC_FILES_PATH}`;
 const PUBLIC_DIR = path.resolve(process.cwd(), "public");
 const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
-const UPLOADS_PUBLIC_PATH = "/uploads";
+const UPLOADS_PUBLIC_PATH = "/api/uploads";
 const UPLOAD_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 if (!APP_TOKEN) {
