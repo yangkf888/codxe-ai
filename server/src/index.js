@@ -214,6 +214,31 @@ const resolveImageUrls = (image_url, image_urls) => {
   return [];
 };
 
+const kieClient = {
+  async createTask(payload) {
+    const response = await fetch(`${KIE_BASE_URL}/api/v1/jobs/createTask`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${KIE_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new ApiError(502, `Kie API error: ${errorText}`);
+    }
+
+    const data = await response.json();
+    if (data?.code !== 200 || !data?.data?.taskId) {
+      throw new ApiError(502, data?.msg || "Kie API error");
+    }
+
+    return data.data.taskId;
+  }
+};
+
 const createOne = async (job = {}) => {
   const {
     mode,
@@ -222,7 +247,8 @@ const createOne = async (job = {}) => {
     image_urls,
     duration = 5,
     aspect_ratio = "16:9",
-    character_id_list
+    character_id_list,
+    batchCount = 1
   } = job;
   const remove_watermark = true;
 
@@ -254,8 +280,7 @@ const createOne = async (job = {}) => {
   const i2vModel = process.env.KIE_I2V_MODEL || "sora-2-image-to-video";
   const model = mode === "i2v" ? i2vModel : t2vModel;
 
-  const localTaskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const createdAt = new Date().toISOString();
+  const normalizedBatchCount = Math.min(Math.max(Number(batchCount) || 1, 1), 20);
 
   const input = {
     prompt,
@@ -272,57 +297,51 @@ const createOne = async (job = {}) => {
     input.character_id_list = character_id_list;
   }
 
-  const response = await fetch(`${KIE_BASE_URL}/api/v1/jobs/createTask`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${KIE_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      callBackUrl: `${PUBLIC_BASE_URL}/api/callback`,
-      input
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new ApiError(502, `Kie API error: ${errorText}`);
-  }
-
-  const data = await response.json();
-  if (data?.code !== 200 || !data?.data?.taskId) {
-    throw new ApiError(502, data?.msg || "Kie API error");
-  }
-
-  const kieTaskId = data.data.taskId;
-  const task = {
-    localTaskId,
-    createdAt,
-    mode,
-    prompt,
-    status: "queued",
-    progress: 0,
-    video_url: null,
-    origin_video_url: null,
-    error: null,
-    kieTaskId,
-    params: {
-      mode,
-      prompt,
-      image_url,
-      image_urls,
-      duration,
-      aspect_ratio,
-      remove_watermark,
-      character_id_list
-    }
+  const taskPayload = {
+    model,
+    callBackUrl: `${PUBLIC_BASE_URL}/api/callback`,
+    input
   };
 
-  await saveTask(task, { refreshRecent: true });
-  console.log(`Created task localTaskId=${localTaskId} kieTaskId=${kieTaskId}`);
+  const kieTaskIds = await Promise.all(
+    Array.from({ length: normalizedBatchCount }, () => kieClient.createTask(taskPayload))
+  );
 
-  return { localTaskId, kieTaskId, status: task.status };
+  const tasks = await Promise.all(
+    kieTaskIds.map(async (kieTaskId) => {
+      const localTaskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const createdAt = new Date().toISOString();
+      const task = {
+        localTaskId,
+        createdAt,
+        mode,
+        prompt,
+        status: "queued",
+        progress: 0,
+        video_url: null,
+        origin_video_url: null,
+        error: null,
+        kieTaskId,
+        params: {
+          mode,
+          prompt,
+          image_url,
+          image_urls,
+          duration,
+          aspect_ratio,
+          remove_watermark,
+          character_id_list,
+          batchCount: normalizedBatchCount
+        }
+      };
+
+      await saveTask(task, { refreshRecent: true });
+      console.log(`Created task localTaskId=${localTaskId} kieTaskId=${kieTaskId}`);
+      return { localTaskId, kieTaskId, status: task.status };
+    })
+  );
+
+  return { tasks };
 };
 
 app.use((req, res, next) => {
@@ -344,8 +363,11 @@ app.use((req, res, next) => {
 
 app.post("/api/video/create", limiter, async (req, res) => {
   try {
-    const { localTaskId } = await createOne(req.body);
-    return res.json({ task_id: localTaskId });
+    const { tasks } = await createOne(req.body);
+    return res.json({
+      task_ids: tasks.map((task) => task.localTaskId),
+      tasks
+    });
   } catch (error) {
     const statusCode = error.statusCode || 500;
     return res.status(statusCode).json({ error: error.message || "Failed to create video task" });
@@ -366,11 +388,12 @@ app.post("/api/video/batch_create", limiter, async (req, res) => {
     jobs.map((job, index) =>
       limit(async () => {
         try {
-          const { localTaskId } = await createOne(job);
+          const { tasks } = await createOne(job);
           return {
             index,
             ok: true,
-            task_id: localTaskId
+            task_ids: tasks.map((task) => task.localTaskId),
+            tasks
           };
         } catch (error) {
           return {
