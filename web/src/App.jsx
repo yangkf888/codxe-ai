@@ -64,6 +64,7 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
   const [copiedPromptId, setCopiedPromptId] = useState(null);
+  const [copiedPreviewPrompt, setCopiedPreviewPrompt] = useState(false);
   const [uploadState, setUploadState] = useState({
     status: "idle",
     message: "",
@@ -71,6 +72,7 @@ export default function App() {
   });
   const imageUploadRef = useRef(null);
   const copiedPromptTimeoutRef = useRef(null);
+  const copiedPreviewTimeoutRef = useRef(null);
 
   const shouldPoll = useMemo(
     () => history.some((task) => !terminalStatuses.has(task.status)),
@@ -120,6 +122,9 @@ export default function App() {
       if (copiedPromptTimeoutRef.current) {
         clearTimeout(copiedPromptTimeoutRef.current);
       }
+      if (copiedPreviewTimeoutRef.current) {
+        clearTimeout(copiedPreviewTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -135,16 +140,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchHistory, shouldPoll]);
 
-  useEffect(() => {
-    if (!notice) {
-      return undefined;
-    }
-    const timer = setTimeout(() => {
-      setNotice("");
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -153,15 +148,16 @@ export default function App() {
     }
   };
 
-  const handleCopy = async (value) => {
+  const handleCopy = async (value, onSuccess) => {
     if (!value) {
       return false;
     }
     try {
       await navigator.clipboard.writeText(value);
+      onSuccess?.();
       return true;
     } catch (err) {
-      setError(err.message || "复制链接失败");
+      setError(err.message || "复制失败");
       return false;
     }
   };
@@ -170,14 +166,30 @@ export default function App() {
     if (!task?.prompt) {
       return;
     }
-    await handleCopy(task.prompt);
-    setCopiedPromptId(task.localTaskId);
-    if (copiedPromptTimeoutRef.current) {
-      clearTimeout(copiedPromptTimeoutRef.current);
+    await handleCopy(task.prompt, () => {
+      setCopiedPromptId(task.localTaskId);
+      if (copiedPromptTimeoutRef.current) {
+        clearTimeout(copiedPromptTimeoutRef.current);
+      }
+      copiedPromptTimeoutRef.current = setTimeout(() => {
+        setCopiedPromptId(null);
+      }, 2000);
+    });
+  };
+
+  const handleCopyPreviewPrompt = async (prompt) => {
+    if (!prompt) {
+      return;
     }
-    copiedPromptTimeoutRef.current = setTimeout(() => {
-      setCopiedPromptId(null);
-    }, 2000);
+    await handleCopy(prompt, () => {
+      setCopiedPreviewPrompt(true);
+      if (copiedPreviewTimeoutRef.current) {
+        clearTimeout(copiedPreviewTimeoutRef.current);
+      }
+      copiedPreviewTimeoutRef.current = setTimeout(() => {
+        setCopiedPreviewPrompt(false);
+      }, 2000);
+    });
   };
 
   const handleDeleteTask = async (taskId) => {
@@ -239,14 +251,12 @@ export default function App() {
         throw new Error(data.error || "上传图片失败");
       }
       const data = await response.json();
-      console.log("Upload response:", data);
       const fileUrl = data?.fileUrl || data?.data?.fileUrl || data?.url;
       if (fileUrl) {
         setForm((prev) => ({ ...prev, image_url: fileUrl }));
         setUploadState({ status: "success", message: "上传完成", fileName: file.name });
         setError("");
       } else {
-        alert(JSON.stringify(data));
         setUploadState({ status: "error", message: "上传失败", fileName: file.name });
       }
     } catch (err) {
@@ -381,6 +391,7 @@ export default function App() {
     [history]
   );
   const previewUrl = latestVideo?.video_url || latestVideo?.origin_video_url;
+  const previewPrompt = latestVideo?.prompt;
 
   return (
     <div className="app-layout">
@@ -443,73 +454,7 @@ export default function App() {
                   </label>
                 </div>
 
-                <div className="field">
-                  <label htmlFor="mode">生成模式</label>
-                  <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
-                    <option value="t2v">文生视频</option>
-                    <option value="i2v">图生视频</option>
-                  </select>
-                </div>
-
-                <div className="field">
-                  <label htmlFor="prompt">提示词 (Prompt)</label>
-                  <textarea
-                    id="prompt"
-                    name="prompt"
-                    rows="4"
-                    placeholder="描述你想生成的视频内容，例如：可爱的小狗在海边奔跑"
-                    value={form.prompt}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                {form.mode === "i2v" && (
-                  <div className="field">
-                    <label htmlFor="image_upload">参考图上传</label>
-                    <div className="upload">
-                      <input
-                        id="image_upload"
-                        name="image_upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleUpload}
-                        disabled={uploadState.status === "uploading"}
-                        ref={imageUploadRef}
-                        className="upload-input"
-                      />
-                      {form.image_url ? (
-                        <div className="image-preview">
-                          <img src={form.image_url} alt="上传预览" />
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() => imageUploadRef.current?.click()}
-                            disabled={uploadState.status === "uploading"}
-                          >
-                            更换图片
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="upload-dropzone"
-                          onClick={() => imageUploadRef.current?.click()}
-                          disabled={uploadState.status === "uploading"}
-                        >
-                          点击上传图片
-                        </button>
-                      )}
-                    </div>
-                    {uploadState.status !== "idle" && (
-                      <p className={`upload-status upload-${uploadState.status}`}>
-                        {uploadState.message}
-                        {uploadState.fileName ? ` (${uploadState.fileName})` : ""}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {batchMode && (
+                {batchMode ? (
                   <div className="field">
                     <label htmlFor="batch_count">生成数量 (Batch Size)</label>
                     <input
@@ -521,44 +466,118 @@ export default function App() {
                       value={batchCount}
                       onChange={(event) => setBatchCount(Number(event.target.value))}
                     />
-                    <small className="helper">当前并发: {batchCount}</small>
+                    <small className="helper">当前数量: {batchCount}</small>
                   </div>
-                )}
+                ) : (
+                  <>
+                    <div className="field">
+                      <label htmlFor="mode">生成模式</label>
+                      <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
+                        <option value="t2v">文生视频</option>
+                        <option value="i2v">图生视频</option>
+                      </select>
+                    </div>
 
-                <div className="grid">
-                  <div className="field">
-                    <label>视频时长</label>
-                    <div className="segmented-control" role="group" aria-label="视频时长">
-                      {durations.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`segment ${form.duration === option.value ? "is-active" : ""}`}
-                          onClick={() => setForm((prev) => ({ ...prev, duration: option.value }))}
-                          aria-pressed={form.duration === option.value}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
+                    <div className="field">
+                      <label htmlFor="prompt">提示词</label>
+                      <textarea
+                        id="prompt"
+                        name="prompt"
+                        rows="4"
+                        placeholder="描述你想生成的视频内容，例如：可爱的小狗在海边奔跑"
+                        value={form.prompt}
+                        onChange={handleChange}
+                      />
                     </div>
-                  </div>
-                  <div className="field">
-                    <label>画面比例</label>
-                    <div className="segmented-control" role="group" aria-label="画面比例">
-                      {aspectRatios.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`segment ${form.aspect_ratio === option.value ? "is-active" : ""}`}
-                          onClick={() => setForm((prev) => ({ ...prev, aspect_ratio: option.value }))}
-                          aria-pressed={form.aspect_ratio === option.value}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
+
+                    {form.mode === "i2v" && (
+                      <div className="field">
+                        <label htmlFor="image_upload">参考图上传</label>
+                        <div className="upload">
+                          <input
+                            id="image_upload"
+                            name="image_upload"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleUpload}
+                            disabled={uploadState.status === "uploading"}
+                            ref={imageUploadRef}
+                            className="upload-input"
+                          />
+                          {form.image_url ? (
+                            <div className="image-preview">
+                              <img src={form.image_url} alt="上传预览" />
+                              <button
+                                type="button"
+                                className="secondary"
+                                onClick={() => imageUploadRef.current?.click()}
+                                disabled={uploadState.status === "uploading"}
+                              >
+                                更换图片
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="upload-dropzone"
+                              onClick={() => imageUploadRef.current?.click()}
+                              disabled={uploadState.status === "uploading"}
+                            >
+                              点击上传图片
+                            </button>
+                          )}
+                        </div>
+                        {uploadState.status !== "idle" && (
+                          <p className={`upload-status upload-${uploadState.status}`}>
+                            {uploadState.message}
+                            {uploadState.fileName ? ` (${uploadState.fileName})` : ""}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid">
+                      <div className="field">
+                        <label>视频时长</label>
+                        <div className="segmented-control" role="group" aria-label="视频时长">
+                          {durations.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={`segment ${form.duration === option.value ? "is-active" : ""}`}
+                              onClick={() =>
+                                setForm((prev) => ({ ...prev, duration: option.value }))
+                              }
+                              aria-pressed={form.duration === option.value}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label>画面比例</label>
+                        <div className="segmented-control" role="group" aria-label="画面比例">
+                          {aspectRatios.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={`segment ${
+                                form.aspect_ratio === option.value ? "is-active" : ""
+                              }`}
+                              onClick={() =>
+                                setForm((prev) => ({ ...prev, aspect_ratio: option.value }))
+                              }
+                              aria-pressed={form.aspect_ratio === option.value}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
 
                 {error && <p className="error">{error}</p>}
 
@@ -591,7 +610,7 @@ export default function App() {
               </form>
             </div>
             <div className="generate-right">
-              <div className="preview-card">
+              <div className="preview-section">
                 <div className="preview-header">
                   <div>
                     <h2>视频预览</h2>
@@ -625,10 +644,10 @@ export default function App() {
                   <button
                     className="preview-action"
                     type="button"
-                    onClick={() => handleCopy(previewUrl)}
-                    disabled={!previewUrl}
+                    onClick={() => handleCopyPreviewPrompt(previewPrompt)}
+                    disabled={!previewPrompt}
                   >
-                    复制链接
+                    {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
                   </button>
                 </div>
               </div>
@@ -663,12 +682,12 @@ export default function App() {
                 </div>
                 {history.map((task) => {
                   const progress = formatProgress(task.progress);
-                  const previewUrl = task.origin_video_url || task.video_url;
+                  const taskPreviewUrl = task.origin_video_url || task.video_url;
                   return (
                     <div key={task.localTaskId} className="history-row">
                       <div className="history-thumb">
-                        {previewUrl ? (
-                          <video src={previewUrl} muted playsInline />
+                        {taskPreviewUrl ? (
+                          <video src={taskPreviewUrl} muted playsInline />
                         ) : (
                           <div className="history-thumb-empty">暂无预览</div>
                         )}
@@ -690,26 +709,18 @@ export default function App() {
                         <button
                           className="secondary"
                           type="button"
-                          onClick={() => setPreviewVideo(previewUrl)}
-                          disabled={!previewUrl}
+                          onClick={() => setPreviewVideo(taskPreviewUrl)}
+                          disabled={!taskPreviewUrl}
                         >
                           预览
                         </button>
                         <button
                           className="secondary"
                           type="button"
-                          onClick={() => handleDownload(previewUrl)}
-                          disabled={!previewUrl}
+                          onClick={() => handleDownload(taskPreviewUrl)}
+                          disabled={!taskPreviewUrl}
                         >
-                          下载
-                        </button>
-                        <button
-                          className="secondary"
-                          type="button"
-                          onClick={() => handleCopy(previewUrl)}
-                          disabled={!previewUrl}
-                        >
-                          复制链接
+                          下载视频
                         </button>
                         <button
                           className="secondary"
@@ -720,7 +731,7 @@ export default function App() {
                           {copiedPromptId === task.localTaskId ? "✅ 已复制" : "复制提示词"}
                         </button>
                         <button
-                          className="danger"
+                          className="btn-delete"
                           type="button"
                           onClick={() => handleDeleteTask(task.localTaskId)}
                           disabled={!token}
