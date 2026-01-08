@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Login from "./Login.jsx";
 
 const initialForm = {
   mode: "t2v",
@@ -476,7 +477,7 @@ export default function App() {
   const [batchMode, setBatchMode] = useState(false);
   const [batchCount, setBatchCount] = useState(1);
   const [batchResult, setBatchResult] = useState(null);
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(() => localStorage.getItem("app_token") || "");
   const [history, setHistory] = useState([]);
   const [currentTask, setCurrentTask] = useState(null);
   const [activeTab, setActiveTab] = useState("generate");
@@ -750,6 +751,17 @@ export default function App() {
     link.remove();
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("app_token");
+    setToken("");
+    setHistory([]);
+    setCurrentTask(null);
+    setPreviewVideo(null);
+    setActiveTab("generate");
+    setBatchResult(null);
+    setError("");
+  };
+
   const handleUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -918,24 +930,22 @@ export default function App() {
   const previewUrl = latestVideo?.video_url || latestVideo?.origin_video_url;
   const previewPrompt = latestVideo?.prompt;
 
+  if (!token) {
+    return (
+      <Login
+        onLogin={(newToken) => {
+          setToken(newToken);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="app-layout">
       <aside className="sidebar">
         <div className="logo-block">
           <div className="logo">YKF-AI</div>
           <p className="logo-subtitle">AI 视频生成平台</p>
-        </div>
-        <div className="token-card">
-          <label htmlFor="token">访问令牌</label>
-          <input
-            id="token"
-            type="password"
-            className="sidebar-token"
-            placeholder="请输入 APP_TOKEN"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-          />
-          <small>仅保存在当前页面，用于访问后端接口。</small>
         </div>
         <nav className="nav">
           <button
@@ -956,7 +966,12 @@ export default function App() {
       </aside>
 
       <div className="main-content-wrapper">
-        <header className="app-header">YKF-AI 视频生成平台</header>
+        <header className="app-header">
+          <span>YKF-AI 视频生成平台</span>
+          <button className="ghost logout-button" type="button" onClick={handleLogout}>
+            退出登录
+          </button>
+        </header>
         <main className="main-content">
           {activeTab === "generate" ? (
             <GenerateView
