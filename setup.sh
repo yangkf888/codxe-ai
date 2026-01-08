@@ -25,45 +25,83 @@ generate_token() {
     date +%s%N
 }
 
+set_env_value() {
+    local key="$1"
+    local value="$2"
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if grep -q "^${key}=" .env; then
+            sed -i '' "s|^${key}=.*|${key}=${value}|g" .env
+        else
+            echo "${key}=${value}" >> .env
+        fi
+    else
+        if grep -q "^${key}=" .env; then
+            sed -i "s|^${key}=.*|${key}=${value}|g" .env
+        else
+            echo "${key}=${value}" >> .env
+        fi
+    fi
+}
+
+read_required() {
+    local prompt="$1"
+    local value=""
+
+    while [ -z "$value" ]; do
+        read -p "$prompt" value
+    done
+
+    echo "$value"
+}
+
 # 1. 检查是否已存在 .env
 if [ -f .env ]; then
     echo "检测到已存在配置文件 (.env)，将直接启动..."
+    set -a
+    . ./.env
+    set +a
 else
     echo "首次运行，请配置基本信息："
     cp .env.example .env
     
     # 交互式输入
-    read -p "请输入你的域名 (例如 https://ai.test.com): " domain
-    read -p "请输入 KIE API Key: " apikey
-    read -p "请输入管理员账号 (默认 admin): " adminUsername
-    read -p "请输入管理员密码 (默认 123456): " adminPassword
+    domain=$(read_required "请输入您的域名 (例如 https://ai.test.com): ")
+    read -p "请输入运行端口 (默认 8090): " appPort
+    apikey=$(read_required "请输入 KIE API Key: ")
+    read -p "设置管理员账号 (默认 admin): " adminUsername
+    adminPassword=$(read_required "设置管理员密码: ")
     token=$(generate_token)
+
+    if [ -z "$appPort" ]; then
+        appPort="8090"
+    fi
 
     if [ -z "$adminUsername" ]; then
         adminUsername="admin"
     fi
 
-    if [ -z "$adminPassword" ]; then
-        adminPassword="123456"
-    fi
-    
-    # 写入 .env (使用 sed 替换)
-    # Mac/Linux 兼容写法
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s|PUBLIC_BASE_URL=|PUBLIC_BASE_URL=$domain|g" .env
-        sed -i '' "s|KIE_API_KEY=|KIE_API_KEY=$apikey|g" .env
-        sed -i '' "s|APP_TOKEN=|APP_TOKEN=$token|g" .env
-        sed -i '' "s|ADMIN_USERNAME=|ADMIN_USERNAME=$adminUsername|g" .env
-        sed -i '' "s|ADMIN_PASSWORD=|ADMIN_PASSWORD=$adminPassword|g" .env
-    else
-        sed -i "s|PUBLIC_BASE_URL=|PUBLIC_BASE_URL=$domain|g" .env
-        sed -i "s|KIE_API_KEY=|KIE_API_KEY=$apikey|g" .env
-        sed -i "s|APP_TOKEN=|APP_TOKEN=$token|g" .env
-        sed -i "s|ADMIN_USERNAME=|ADMIN_USERNAME=$adminUsername|g" .env
-        sed -i "s|ADMIN_PASSWORD=|ADMIN_PASSWORD=$adminPassword|g" .env
-    fi
+    # 写入 .env
+    set_env_value "PUBLIC_BASE_URL" "$domain"
+    set_env_value "APP_PORT" "$appPort"
+    set_env_value "KIE_API_KEY" "$apikey"
+    set_env_value "APP_TOKEN" "$token"
+    set_env_value "ADMIN_USERNAME" "$adminUsername"
+    set_env_value "ADMIN_PASSWORD" "$adminPassword"
     
     echo -e "${GREEN}配置已生成！${NC}"
+    set -a
+    . ./.env
+    set +a
+fi
+
+# 兼容缺省值
+if [ -z "$APP_PORT" ]; then
+    APP_PORT="8090"
+fi
+
+if [ -z "$ADMIN_USERNAME" ]; then
+    ADMIN_USERNAME="admin"
 fi
 
 # 2. 赋予权限并启动
@@ -72,7 +110,12 @@ chmod +x setup.sh
 docker-compose down
 docker-compose up -d --build
 
-echo -e "${GREEN}==============================${NC}"
-echo -e "${GREEN}部署完成！${NC}"
-echo -e "请访问: $domain"
-echo -e "${GREEN}==============================${NC}"
+echo -e "${GREEN}================================================${NC}"
+echo -e "${GREEN}✅ 部署成功！${NC}"
+echo -e "🔌 本地地址: http://127.0.0.1:${APP_PORT}"
+echo -e "🌐 您的域名: ${PUBLIC_BASE_URL}"
+echo -e "🔑 KIE Key: 已配置"
+echo -e "👤 管理员: ${ADMIN_USERNAME}"
+echo -e ""
+echo -e "⚠️ 请将您的域名反向代理到上述“本地地址” (端口 ${APP_PORT})"
+echo -e "${GREEN}================================================${NC}"

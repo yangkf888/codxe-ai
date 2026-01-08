@@ -32,7 +32,7 @@ services:
     container_name: ai-video-frontend
     restart: always
     ports:
-      - "8090:80"
+      - "${APP_PORT:-8090}:80"
     volumes:
       - ./server/files:/usr/share/nginx/html/files
       - ./server/public/uploads:/usr/share/nginx/html/uploads
