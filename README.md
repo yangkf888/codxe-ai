@@ -219,11 +219,14 @@ cd /var/www/ai-video
 脚本会引导填写以下配置并生成 `.env`：
 
 - `PUBLIC_BASE_URL`
+- `APP_PORT`（默认 8090）
 - `KIE_API_KEY`
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
 
 `APP_TOKEN` 将由脚本自动生成，无需手动输入。
+
+脚本完成后会提示本地访问地址（`http://127.0.0.1:<APP_PORT>`）与域名反向代理信息。
 
 完成后自动执行 `docker-compose up -d --build`。
 
