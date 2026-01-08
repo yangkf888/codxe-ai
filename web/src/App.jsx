@@ -43,6 +43,11 @@ const formatTimestamp = (value) => {
 
 export default function App() {
   const [form, setForm] = useState(initialForm);
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchPrompt, setBatchPrompt] = useState("");
+  const [batchImages, setBatchImages] = useState([]);
+  const [batchConcurrency, setBatchConcurrency] = useState("5");
+  const [batchResult, setBatchResult] = useState(null);
   const [token, setToken] = useState("");
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -122,69 +127,42 @@ export default function App() {
     }
   };
 
-  const handleUpload = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
+  const handleBatchImageChange = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) {
+      setBatchImages([]);
       return;
     }
-    setError("");
-    setUploadState({
-      status: "uploading",
-      message: "Uploading image...",
-      fileName: file.name
-    });
-
-    const body = new FormData();
-    body.append("file", file);
 
     try {
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        headers: token ? { "X-APP-TOKEN": token } : {},
-        body
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to upload image");
-      }
-
-      const data = await response.json();
-      if (!data.fileUrl) {
-        throw new Error("Upload failed: missing file URL");
-      }
-
-      setForm((prev) => ({ ...prev, image_url: data.fileUrl }));
-      setUploadState({
-        status: "success",
-        message: "Upload complete. Image URL added.",
-        fileName: file.name
-      });
+      const dataUrls = await Promise.all(
+        files.map(
+          (file) =>
+            new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve({ name: file.name, dataUrl: reader.result });
+              reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+              reader.readAsDataURL(file);
+            })
+        )
+      );
+      setBatchImages(dataUrls);
     } catch (err) {
-      setUploadState({
-        status: "error",
-        message: err.message,
-        fileName: file.name
-      });
+      setError(err.message || "Failed to load batch images.");
     }
   };
-
-  useEffect(() => {
-    if (form.mode !== "i2v") {
-      setUploadState({ status: "idle", message: "", fileName: "" });
-    }
-  }, [form.mode]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    setBatchResult(null);
 
-    if (!form.prompt.trim()) {
+    if (!batchMode && !form.prompt.trim()) {
       setError("Prompt is required.");
       return;
     }
 
-    if (form.mode === "i2v" && !form.image_url.trim()) {
+    if (!batchMode && form.mode === "i2v" && !form.image_url.trim()) {
       setError("Image URL is required for Image-to-Video.");
       return;
     }
@@ -192,39 +170,133 @@ export default function App() {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/video/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "X-APP-TOKEN": token } : {})
-        },
-        body: JSON.stringify({
+      if (batchMode) {
+        const trimmedPrompts = batchPrompt
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const hasBatchImages = batchImages.length > 0;
+
+        if (!hasBatchImages && trimmedPrompts.length === 0) {
+          setError("Provide batch prompts or upload images for batch mode.");
+          return;
+        }
+
+        if (hasBatchImages && form.mode !== "i2v") {
+          setError("Batch image upload is only available for Image-to-Video.");
+          return;
+        }
+
+        if (hasBatchImages && !form.prompt.trim()) {
+          setError("Prompt is required when submitting image batches.");
+          return;
+        }
+
+        if (!hasBatchImages && form.mode === "i2v") {
+          setError("Batch prompt mode currently supports Text-to-Video only.");
+          return;
+        }
+
+        const jobs = hasBatchImages
+          ? batchImages.map((image) => ({
+              mode: "i2v",
+              prompt: form.prompt.trim(),
+              image_url: image.dataUrl,
+              duration: Number(form.duration),
+              aspect_ratio: form.aspect_ratio
+            }))
+          : trimmedPrompts.map((prompt) => ({
+              mode: "t2v",
+              prompt,
+              duration: Number(form.duration),
+              aspect_ratio: form.aspect_ratio
+            }));
+
+        const response = await fetch("/api/video/batch_create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "X-APP-TOKEN": token } : {})
+          },
+          body: JSON.stringify({
+            concurrency: Number(batchConcurrency) || 5,
+            jobs
+          })
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to create batch tasks");
+        }
+
+        const data = await response.json();
+        const results = data.results || [];
+        const successes = results.filter((result) => result.ok);
+        const failures = results.filter((result) => !result.ok);
+
+        const newTasks = successes.map((result) => {
+          const job = jobs[result.index] || {};
+          return {
+            localTaskId: result.task_id,
+            createdAt: new Date().toISOString(),
+            mode: job.mode || form.mode,
+            prompt: job.prompt,
+            status: "queued",
+            progress: 0,
+            video_url: null,
+            origin_video_url: null,
+            error: null
+          };
+        });
+
+        if (newTasks.length > 0) {
+          setHistory((prev) => [...newTasks, ...prev]);
+        }
+
+        setBatchResult({
+          total: jobs.length,
+          successCount: successes.length,
+          failureCount: failures.length,
+          failures: failures.map((failure) => ({
+            index: failure.index,
+            error: failure.error || "Failed to submit task"
+          }))
+        });
+      } else {
+        const response = await fetch("/api/video/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "X-APP-TOKEN": token } : {})
+          },
+          body: JSON.stringify({
+            mode: form.mode,
+            prompt: form.prompt,
+            image_url: form.mode === "i2v" ? form.image_url : undefined,
+            duration: Number(form.duration),
+            aspect_ratio: form.aspect_ratio
+          })
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to create task");
+        }
+
+        const data = await response.json();
+        const newTask = {
+          localTaskId: data.task_id,
+          createdAt: new Date().toISOString(),
           mode: form.mode,
           prompt: form.prompt,
-          image_url: form.mode === "i2v" ? form.image_url : undefined,
-          duration: Number(form.duration),
-          aspect_ratio: form.aspect_ratio
-        })
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create task");
+          status: "queued",
+          progress: 0,
+          video_url: null,
+          origin_video_url: null,
+          error: null
+        };
+        setHistory((prev) => [newTask, ...prev]);
       }
-
-      const data = await response.json();
-      const newTask = {
-        localTaskId: data.task_id,
-        createdAt: new Date().toISOString(),
-        mode: form.mode,
-        prompt: form.prompt,
-        status: "queued",
-        progress: 0,
-        video_url: null,
-        origin_video_url: null,
-        error: null
-      };
-      setHistory((prev) => [newTask, ...prev]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -259,6 +331,20 @@ export default function App() {
         <section className="card">
           <h2>Create a task</h2>
           <form className="form" onSubmit={handleSubmit}>
+            <div className="batch-toggle">
+              <div>
+                <span className="toggle-title">Batch Mode</span>
+                <p className="muted">Submit multiple prompts or images in one request.</p>
+              </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={batchMode}
+                  onChange={(event) => setBatchMode(event.target.checked)}
+                />
+                <span className="slider" />
+              </label>
+            </div>
             <div className="field">
               <label htmlFor="mode">Mode</label>
               <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
@@ -267,17 +353,57 @@ export default function App() {
               </select>
             </div>
             <div className="field">
-              <label htmlFor="prompt">Prompt</label>
+              <label htmlFor="prompt">{batchMode ? "Base prompt" : "Prompt"}</label>
               <textarea
                 id="prompt"
                 name="prompt"
                 rows="4"
-                placeholder="Describe the video you want..."
+                placeholder={
+                  batchMode ? "Used for batch image uploads (one prompt for all images)." : "Describe the video you want..."
+                }
                 value={form.prompt}
                 onChange={handleChange}
               />
+              {batchMode && <small className="helper">Base prompt is required only for batch images.</small>}
             </div>
-            {form.mode === "i2v" && (
+            {batchMode && (
+              <div className="field">
+                <label htmlFor="batch_prompt">Batch prompts (one per line)</label>
+                <textarea
+                  id="batch_prompt"
+                  name="batch_prompt"
+                  rows="5"
+                  placeholder="Line 1 prompt\nLine 2 prompt\nLine 3 prompt"
+                  value={batchPrompt}
+                  onChange={(event) => setBatchPrompt(event.target.value)}
+                />
+                <small className="helper">Each non-empty line becomes a separate task.</small>
+              </div>
+            )}
+            {batchMode && form.mode === "i2v" && (
+              <div className="field">
+                <label htmlFor="batch_images">Batch image upload</label>
+                <input
+                  id="batch_images"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleBatchImageChange}
+                />
+                {batchImages.length > 0 ? (
+                  <div className="file-list">
+                    {batchImages.map((image, index) => (
+                      <span key={`${image.name}-${index}`} className="file-chip">
+                        {image.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <small className="helper">Upload images to create one task per image.</small>
+                )}
+              </div>
+            )}
+            {!batchMode && form.mode === "i2v" && (
               <div className="field">
                 <label htmlFor="image_url">Image URL</label>
                 <input
@@ -333,9 +459,40 @@ export default function App() {
                 </select>
               </div>
             </div>
+            {batchMode && (
+              <div className="field">
+                <label htmlFor="concurrency">Concurrency</label>
+                <input
+                  id="concurrency"
+                  name="concurrency"
+                  type="number"
+                  min="1"
+                  max="30"
+                  value={batchConcurrency}
+                  onChange={(event) => setBatchConcurrency(event.target.value)}
+                />
+                <small className="helper">Default 5; higher values submit in parallel.</small>
+              </div>
+            )}
             {error && <p className="error">{error}</p>}
+            {batchResult && (
+              <div className="batch-result">
+                <p>
+                  Batch submitted: {batchResult.successCount} succeeded, {batchResult.failureCount} failed.
+                </p>
+                {batchResult.failureCount > 0 && (
+                  <ul>
+                    {batchResult.failures.map((failure) => (
+                      <li key={failure.index}>
+                        Task #{failure.index + 1}: {failure.error}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <button className="primary" type="submit" disabled={loading}>
-              {loading ? "Creating..." : "Generate"}
+              {loading ? (batchMode ? "Submitting batch..." : "Creating...") : batchMode ? "Submit batch" : "Generate"}
             </button>
           </form>
         </section>
