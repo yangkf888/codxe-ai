@@ -154,12 +154,12 @@ button {
 
 .form {
   display: grid;
-  gap: 16px;
+  gap: 24px;
 }
 
 .form-section {
   padding: 16px;
-  gap: 12px;
+  gap: 24px;
 }
 
 .field {
@@ -182,6 +182,7 @@ select {
 }
 
 textarea {
+  min-height: 150px;
   resize: vertical;
 }
 
