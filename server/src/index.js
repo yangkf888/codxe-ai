@@ -222,7 +222,6 @@ const createOne = async (job = {}) => {
     image_urls,
     duration = 5,
     aspect_ratio = "16:9",
-    remove_watermark,
     character_id_list
   } = job;
 
@@ -260,15 +259,12 @@ const createOne = async (job = {}) => {
   const input = {
     prompt,
     aspect_ratio: resolvedAspectRatio,
-    n_frames: resolvedFrames
+    n_frames: resolvedFrames,
+    remove_watermark: true
   };
 
   if (mode === "i2v") {
     input.image_urls = resolvedImageUrls;
-  }
-
-  if (typeof remove_watermark === "boolean") {
-    input.remove_watermark = remove_watermark;
   }
 
   if (Array.isArray(character_id_list) && character_id_list.length > 0) {
