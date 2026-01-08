@@ -742,7 +742,12 @@ export default function App() {
       {previewVideo && (
         <div className="modal-overlay" onClick={() => setPreviewVideo(null)}>
           <div className="modal-content" onClick={(event) => event.stopPropagation()}>
-            <video controls autoPlay src={previewVideo} />
+            <video
+              className="history-preview-video"
+              controls
+              autoPlay
+              src={previewVideo}
+            />
           </div>
         </div>
       )}
