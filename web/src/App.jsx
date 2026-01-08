@@ -454,7 +454,114 @@ export default function App() {
                   </label>
                 </div>
 
-                {batchMode ? (
+                <div className="field">
+                  <label htmlFor="mode">生成模式</label>
+                  <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
+                    <option value="t2v">文生视频</option>
+                    <option value="i2v">图生视频</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label htmlFor="prompt">提示词</label>
+                  <textarea
+                    id="prompt"
+                    name="prompt"
+                    rows="4"
+                    placeholder="描述你想生成的视频内容，例如：可爱的小狗在海边奔跑"
+                    value={form.prompt}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                {form.mode === "i2v" && (
+                  <div className="field">
+                    <label htmlFor="image_upload">参考图上传</label>
+                    <div className="upload">
+                      <input
+                        id="image_upload"
+                        name="image_upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUpload}
+                        disabled={uploadState.status === "uploading"}
+                        ref={imageUploadRef}
+                        className="upload-input"
+                      />
+                      {form.image_url ? (
+                        <div className="image-preview">
+                          <img src={form.image_url} alt="上传预览" />
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => imageUploadRef.current?.click()}
+                            disabled={uploadState.status === "uploading"}
+                          >
+                            更换图片
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="upload-dropzone"
+                          onClick={() => imageUploadRef.current?.click()}
+                          disabled={uploadState.status === "uploading"}
+                        >
+                          点击上传图片
+                        </button>
+                      )}
+                    </div>
+                    {uploadState.status !== "idle" && (
+                      <p className={`upload-status upload-${uploadState.status}`}>
+                        {uploadState.message}
+                        {uploadState.fileName ? ` (${uploadState.fileName})` : ""}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid">
+                  <div className="field">
+                    <label>视频时长</label>
+                    <div className="segmented-control" role="group" aria-label="视频时长">
+                      {durations.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`segment ${form.duration === option.value ? "is-active" : ""}`}
+                          onClick={() =>
+                            setForm((prev) => ({ ...prev, duration: option.value }))
+                          }
+                          aria-pressed={form.duration === option.value}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label>画面比例</label>
+                    <div className="segmented-control" role="group" aria-label="画面比例">
+                      {aspectRatios.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`segment ${
+                            form.aspect_ratio === option.value ? "is-active" : ""
+                          }`}
+                          onClick={() =>
+                            setForm((prev) => ({ ...prev, aspect_ratio: option.value }))
+                          }
+                          aria-pressed={form.aspect_ratio === option.value}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {batchMode && (
                   <div className="field">
                     <label htmlFor="batch_count">生成数量 (Batch Size)</label>
                     <input
@@ -468,115 +575,6 @@ export default function App() {
                     />
                     <small className="helper">当前数量: {batchCount}</small>
                   </div>
-                ) : (
-                  <>
-                    <div className="field">
-                      <label htmlFor="mode">生成模式</label>
-                      <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
-                        <option value="t2v">文生视频</option>
-                        <option value="i2v">图生视频</option>
-                      </select>
-                    </div>
-
-                    <div className="field">
-                      <label htmlFor="prompt">提示词</label>
-                      <textarea
-                        id="prompt"
-                        name="prompt"
-                        rows="4"
-                        placeholder="描述你想生成的视频内容，例如：可爱的小狗在海边奔跑"
-                        value={form.prompt}
-                        onChange={handleChange}
-                      />
-                    </div>
-
-                    {form.mode === "i2v" && (
-                      <div className="field">
-                        <label htmlFor="image_upload">参考图上传</label>
-                        <div className="upload">
-                          <input
-                            id="image_upload"
-                            name="image_upload"
-                            type="file"
-                            accept="image/*"
-                            onChange={handleUpload}
-                            disabled={uploadState.status === "uploading"}
-                            ref={imageUploadRef}
-                            className="upload-input"
-                          />
-                          {form.image_url ? (
-                            <div className="image-preview">
-                              <img src={form.image_url} alt="上传预览" />
-                              <button
-                                type="button"
-                                className="secondary"
-                                onClick={() => imageUploadRef.current?.click()}
-                                disabled={uploadState.status === "uploading"}
-                              >
-                                更换图片
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              className="upload-dropzone"
-                              onClick={() => imageUploadRef.current?.click()}
-                              disabled={uploadState.status === "uploading"}
-                            >
-                              点击上传图片
-                            </button>
-                          )}
-                        </div>
-                        {uploadState.status !== "idle" && (
-                          <p className={`upload-status upload-${uploadState.status}`}>
-                            {uploadState.message}
-                            {uploadState.fileName ? ` (${uploadState.fileName})` : ""}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="grid">
-                      <div className="field">
-                        <label>视频时长</label>
-                        <div className="segmented-control" role="group" aria-label="视频时长">
-                          {durations.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className={`segment ${form.duration === option.value ? "is-active" : ""}`}
-                              onClick={() =>
-                                setForm((prev) => ({ ...prev, duration: option.value }))
-                              }
-                              aria-pressed={form.duration === option.value}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="field">
-                        <label>画面比例</label>
-                        <div className="segmented-control" role="group" aria-label="画面比例">
-                          {aspectRatios.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className={`segment ${
-                                form.aspect_ratio === option.value ? "is-active" : ""
-                              }`}
-                              onClick={() =>
-                                setForm((prev) => ({ ...prev, aspect_ratio: option.value }))
-                              }
-                              aria-pressed={form.aspect_ratio === option.value}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </>
                 )}
 
                 {error && <p className="error">{error}</p>}
