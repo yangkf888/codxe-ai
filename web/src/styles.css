@@ -99,6 +99,26 @@ button {
   height: 100vh;
 }
 
+.app-header {
+  height: 60px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.sidebar-token {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 8px;
+  border-radius: 4px;
+  width: 90%;
+  font-size: 12px;
+  margin: 12px auto 0;
+}
+
 .token-card {
   display: grid;
   gap: 8px;
@@ -125,6 +145,7 @@ button {
   align-items: start;
   max-width: 100%;
   height: 100%;
+  padding-top: 0;
 }
 
 .generate-left,
