@@ -440,6 +440,14 @@ export default function App() {
               </header>
               <form className="form form-section" onSubmit={handleSubmit}>
                 <div className="field">
+                  <label htmlFor="mode">生成模式</label>
+                  <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
+                    <option value="t2v">文生视频</option>
+                    <option value="i2v">图生视频</option>
+                  </select>
+                </div>
+
+                <div className="field">
                   <label htmlFor="prompt">提示词</label>
                   <textarea
                     id="prompt"
@@ -449,14 +457,6 @@ export default function App() {
                     value={form.prompt}
                     onChange={handleChange}
                   />
-                </div>
-
-                <div className="field">
-                  <label htmlFor="mode">生成模式</label>
-                  <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
-                    <option value="t2v">文生视频</option>
-                    <option value="i2v">图生视频</option>
-                  </select>
                 </div>
 
                 {form.mode === "i2v" && (
