@@ -53,11 +53,13 @@ const formatTimestamp = (value) => {
 
 export default function App() {
   const [form, setForm] = useState(initialForm);
+  const [simulatedProgress, setSimulatedProgress] = useState(0);
   const [batchMode, setBatchMode] = useState(false);
   const [batchCount, setBatchCount] = useState(1);
   const [batchResult, setBatchResult] = useState(null);
   const [token, setToken] = useState("");
   const [history, setHistory] = useState([]);
+  const [currentTask, setCurrentTask] = useState(null);
   const [activeTab, setActiveTab] = useState("generate");
   const [previewVideo, setPreviewVideo] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -118,6 +120,37 @@ export default function App() {
   }, [fetchHistory]);
 
   useEffect(() => {
+    const isActiveStatus = currentTask?.status === "running" || currentTask?.status === "queued";
+    if (!isActiveStatus || simulatedProgress >= 95) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      setSimulatedProgress((prev) => {
+        if (prev >= 95) {
+          return prev;
+        }
+        const increment = 1 + Math.random();
+        return Math.min(prev + increment, 95);
+      });
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [currentTask?.status, simulatedProgress]);
+
+  useEffect(() => {
+    if (!currentTask) {
+      return;
+    }
+    const latestTask = history.find(
+      (task) => task.localTaskId === currentTask.localTaskId
+    );
+    if (latestTask) {
+      setCurrentTask(latestTask);
+    }
+  }, [currentTask, history]);
+
+  useEffect(() => {
     return () => {
       if (copiedPromptTimeoutRef.current) {
         clearTimeout(copiedPromptTimeoutRef.current);
@@ -139,6 +172,70 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [fetchHistory, shouldPoll]);
+
+  const pollTaskStatus = useCallback(
+    async (taskId) => {
+      if (!taskId) {
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/video/status?task_id=${encodeURIComponent(taskId)}`,
+          {
+            headers: token ? { "X-APP-TOKEN": token } : {}
+          }
+        );
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        setHistory((prev) =>
+          prev.map((task) =>
+            task.localTaskId === taskId
+              ? {
+                  ...task,
+                  status: data.status ?? task.status,
+                  progress: data.progress ?? task.progress,
+                  video_url: data.video_url ?? task.video_url,
+                  error: data.error ?? task.error
+                }
+              : task
+          )
+        );
+        setCurrentTask((prev) =>
+          prev && prev.localTaskId === taskId
+            ? {
+                ...prev,
+                status: data.status ?? prev.status,
+                progress: data.progress ?? prev.progress,
+                video_url: data.video_url ?? prev.video_url,
+                error: data.error ?? prev.error
+              }
+            : prev
+        );
+        if (data.status === "succeeded") {
+          setSimulatedProgress(100);
+        }
+      } catch (err) {
+        return;
+      }
+    },
+    [token]
+  );
+
+  useEffect(() => {
+    if (!currentTask || terminalStatuses.has(currentTask.status)) {
+      return;
+    }
+
+    pollTaskStatus(currentTask.localTaskId);
+    const interval = setInterval(() => {
+      pollTaskStatus(currentTask.localTaskId);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [currentTask, pollTaskStatus]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -271,6 +368,7 @@ export default function App() {
     event.preventDefault();
     setError("");
     setBatchResult(null);
+    setSimulatedProgress(0);
 
     if (!form.prompt.trim()) {
       setError("请输入提示词。");
@@ -333,6 +431,7 @@ export default function App() {
 
         if (newTasks.length > 0) {
           setHistory((prev) => [...newTasks, ...prev]);
+          setCurrentTask(newTasks[0]);
         }
 
         setBatchResult({
@@ -378,6 +477,7 @@ export default function App() {
           error: null
         };
         setHistory((prev) => [newTask, ...prev]);
+        setCurrentTask(newTask);
       }
     } catch (err) {
       setError(err.message);
@@ -672,7 +772,15 @@ export default function App() {
                   <div>操作</div>
                 </div>
                 {history.map((task) => {
-                  const progress = formatProgress(task.progress);
+                  const actualProgress = formatProgress(task.progress);
+                  const simulatedValue =
+                    task.localTaskId === currentTask?.localTaskId
+                      ? Math.round(simulatedProgress)
+                      : null;
+                  const progress =
+                    simulatedValue !== null
+                      ? Math.max(actualProgress ?? 0, simulatedValue)
+                      : actualProgress;
                   const taskPreviewUrl = task.origin_video_url || task.video_url;
                   return (
                     <div key={task.localTaskId} className="history-row">
