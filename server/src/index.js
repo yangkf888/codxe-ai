@@ -1,10 +1,9 @@
 import dotenv from "dotenv";
 import express from "express";
+import cors from "cors";
 import rateLimit from "express-rate-limit";
 import pLimit from "p-limit";
 import multer from "multer";
-import axios from "axios";
-import FormData from "form-data";
 import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
@@ -22,11 +21,14 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://your-domain.com"
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6380";
 const TASK_TTL_SECONDS = Number(process.env.TASK_TTL_SECONDS || 60 * 60 * 24 * 7);
 const FILES_DIR = process.env.FILES_DIR || path.resolve(process.cwd(), "files");
-const UPLOADS_DIR = process.env.UPLOADS_DIR || path.resolve(process.cwd(), "uploads");
 const PUBLIC_FILES_PATH = process.env.PUBLIC_FILES_PATH || "/files";
 const NORMALIZED_FILES_PATH = PUBLIC_FILES_PATH.startsWith("/")
   ? PUBLIC_FILES_PATH
   : `/${PUBLIC_FILES_PATH}`;
+const PUBLIC_DIR = path.resolve(process.cwd(), "public");
+const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
+const UPLOADS_PUBLIC_PATH = "/uploads";
+const UPLOAD_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 if (!APP_TOKEN) {
   console.warn("APP_TOKEN is not set; all requests will be rejected.");
@@ -48,6 +50,11 @@ const recentKey = "aiVideo:recent";
 const buildPublicVideoUrl = (localTaskId) => {
   const base = PUBLIC_BASE_URL.replace(/\/+$/, "");
   return `${base}${NORMALIZED_FILES_PATH}/${localTaskId}.mp4`;
+};
+
+const buildPublicUploadUrl = (filename) => {
+  const base = PUBLIC_BASE_URL.replace(/\/+$/, "");
+  return `${base}${UPLOADS_PUBLIC_PATH}/${filename}`;
 };
 
 const parseTask = (raw) => {
@@ -85,8 +92,34 @@ const ensureFilesDir = async () => {
   await fs.promises.mkdir(FILES_DIR, { recursive: true });
 };
 
-const ensureUploadsDir = () => {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+const ensureUploadsDir = async () => {
+  await fs.promises.mkdir(UPLOADS_DIR, { recursive: true });
+};
+
+const cleanupOldFiles = async () => {
+  try {
+    await ensureUploadsDir();
+    const entries = await fs.promises.readdir(UPLOADS_DIR, { withFileTypes: true });
+    const now = Date.now();
+    await Promise.all(
+      entries.map(async (entry) => {
+        if (!entry.isFile()) {
+          return;
+        }
+        const filePath = path.join(UPLOADS_DIR, entry.name);
+        try {
+          const stats = await fs.promises.stat(filePath);
+          if (now - stats.mtimeMs > UPLOAD_EXPIRY_MS) {
+            await fs.promises.unlink(filePath);
+          }
+        } catch (error) {
+          console.warn(`Failed to clean upload ${filePath}: ${error.message}`);
+        }
+      })
+    );
+  } catch (error) {
+    console.warn(`Failed to cleanup uploads: ${error.message}`);
+  }
 };
 
 const downloadVideo = async (localTaskId, originUrl) => {
@@ -153,8 +186,10 @@ const parseResultVideoUrl = (rawResultJson) => {
 };
 
 app.set("trust proxy", 1);
+app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 app.use(NORMALIZED_FILES_PATH, express.static(FILES_DIR));
+app.use(UPLOADS_PUBLIC_PATH, express.static(UPLOADS_DIR));
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
@@ -181,18 +216,20 @@ const frameMap = {
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination: (req, file, cb) => {
+    destination: async (req, file, cb) => {
       try {
-        ensureUploadsDir();
+        await ensureUploadsDir();
         cb(null, UPLOADS_DIR);
       } catch (error) {
         cb(error);
       }
     },
     filename: (req, file, cb) => {
-      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      const safeName = file.originalname ? path.basename(file.originalname) : "upload";
-      cb(null, `${uniqueSuffix}-${safeName}`);
+      const timestamp = Date.now();
+      const ext = file.originalname ? path.extname(file.originalname) : "";
+      const base = file.originalname ? path.basename(file.originalname, ext) : "upload";
+      const safeBase = base.replace(/[^a-z0-9-_]/gi, "_");
+      cb(null, `${timestamp}-${safeBase}${ext}`);
     }
   })
 });
@@ -414,84 +451,14 @@ app.post("/api/video/batch_create", limiter, async (req, res) => {
 });
 
 app.post("/api/upload", limiter, upload.single("file"), async (req, res) => {
-  let responseSent = false;
-  try {
-    if (!KIE_API_KEY) {
-      responseSent = true;
-      return res.status(500).json({ ok: false, error: "KIE_API_KEY is not set" });
-    }
-
-    if (!req.file) {
-      responseSent = true;
-      return res.status(400).json({ ok: false, error: "file is required" });
-    }
-
-    const formData = new FormData();
-    formData.append("file", fs.createReadStream(req.file.path), {
-      filename: req.file.originalname || "upload",
-      contentType: req.file.mimetype
-    });
-    formData.append("uploadPath", "ai-video-uploads");
-
-    const fileName = req.body?.fileName;
-    if (fileName) {
-      formData.append("fileName", fileName);
-    }
-
-    const response = await axios.post(
-      "https://kieai.redpandaai.co/api/file-stream-upload",
-      formData,
-      {
-        headers: {
-          ...formData.getHeaders(),
-          Authorization: `Bearer ${KIE_API_KEY}`
-        },
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-        validateStatus: () => true
-      }
-    );
-
-    if (response.status < 200 || response.status >= 300) {
-      const message =
-        response.data?.msg ||
-        response.data?.message ||
-        `Upload failed with status ${response.status}`;
-      responseSent = true;
-      return res.status(502).json({ ok: false, error: message });
-    }
-
-    const responseBody = response.data || {};
-    const fileUrl =
-      responseBody.data?.downloadUrl ||
-      responseBody.downloadUrl ||
-      responseBody.data?.fileUrl ||
-      responseBody.fileUrl;
-    if (!fileUrl) {
-      responseSent = true;
-      return res.status(502).json({ ok: false, error: "Upload response missing fileUrl" });
-    }
-
-    responseSent = true;
-    return res.json({ ok: true, fileUrl });
-  } catch (error) {
-    console.error("Upload failed", error);
-    const message =
-      error.response?.data?.msg || error.response?.data?.message || error.message || "Upload failed";
-    if (!responseSent) {
-      responseSent = true;
-      return res.status(500).json({ ok: false, error: message });
-    }
-    return undefined;
-  } finally {
-    if (req.file?.path) {
-      try {
-        await fs.promises.unlink(req.file.path);
-      } catch (error) {
-        console.warn(`Failed to remove temp upload: ${error.message}`);
-      }
-    }
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: "file is required" });
   }
+
+  return res.json({
+    success: true,
+    url: buildPublicUploadUrl(req.file.filename)
+  });
 });
 
 app.get("/api/video/status", async (req, res) => {
@@ -641,6 +608,11 @@ const startServer = async () => {
   try {
     await redisClient.connect();
     await ensureFilesDir();
+    await ensureUploadsDir();
+    await cleanupOldFiles();
+    setInterval(() => {
+      void cleanupOldFiles();
+    }, 24 * 60 * 60 * 1000);
     app.listen(PORT, () => {
       console.log(`AI video server listening on port ${PORT}`);
     });
