@@ -510,12 +510,6 @@ export default function App() {
                         </button>
                       )}
                     </div>
-                    {uploadState.status !== "idle" && (
-                      <p className={`upload-status upload-${uploadState.status}`}>
-                        {uploadState.message}
-                        {uploadState.fileName ? ` (${uploadState.fileName})` : ""}
-                      </p>
-                    )}
                   </div>
                 )}
 
