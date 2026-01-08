@@ -67,6 +67,12 @@ export default function App() {
 
   const fetchHistory = useCallback(
     async (silent = false) => {
+      if (!token) {
+        if (!silent) {
+          setHistoryLoading(false);
+        }
+        return;
+      }
       if (!silent) {
         setHistoryLoading(true);
       }
@@ -551,7 +557,12 @@ export default function App() {
         <section className="card history">
           <div className="history-header">
             <h2>History</h2>
-            <button className="ghost" type="button" onClick={() => fetchHistory()} disabled={historyLoading}>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => fetchHistory()}
+              disabled={historyLoading || !token}
+            >
               {historyLoading ? "Refreshing..." : "Refresh"}
             </button>
           </div>
