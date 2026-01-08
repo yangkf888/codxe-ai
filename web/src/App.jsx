@@ -51,6 +51,261 @@ const formatTimestamp = (value) => {
   return date.toLocaleString();
 };
 
+function GenerateView({
+  form,
+  handleSubmit,
+  handleChange,
+  handleUpload,
+  uploadState,
+  imageUploadRef,
+  durations,
+  aspectRatios,
+  setForm,
+  batchMode,
+  setBatchMode,
+  batchCount,
+  setBatchCount,
+  error,
+  batchResult,
+  loading,
+  latestVideo,
+  previewUrl,
+  previewPrompt,
+  handleDownload,
+  handleCopyPreviewPrompt,
+  copiedPreviewPrompt,
+  historyLoading,
+  token,
+  fetchHistory,
+  previewTask,
+  simulatedProgress
+}) {
+  const isQueuedOrRunning =
+    previewTask && (previewTask.status === "queued" || previewTask.status === "running");
+  const statusLabel = previewTask ? statusLabels[previewTask.status] || previewTask.status : "";
+
+  return (
+    <section className="generate-view">
+      <div className="generate-left">
+        <form className="form form-section" onSubmit={handleSubmit}>
+          <div className="field">
+            <label htmlFor="mode">生成模式</label>
+            <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
+              <option value="t2v">文生视频</option>
+              <option value="i2v">图生视频</option>
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="prompt">提示词</label>
+            <textarea
+              id="prompt"
+              name="prompt"
+              rows="4"
+              placeholder="描述你想生成的视频内容，例如：可爱的小狗在海边奔跑"
+              value={form.prompt}
+              onChange={handleChange}
+            />
+          </div>
+
+          {form.mode === "i2v" && (
+            <div className="field">
+              <label htmlFor="image_upload">参考图上传</label>
+              <div className="upload">
+                <input
+                  id="image_upload"
+                  name="image_upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleUpload}
+                  disabled={uploadState.status === "uploading"}
+                  ref={imageUploadRef}
+                  className="upload-input"
+                />
+                {form.image_url ? (
+                  <div className="image-preview">
+                    <img src={form.image_url} alt="上传预览" />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => imageUploadRef.current?.click()}
+                      disabled={uploadState.status === "uploading"}
+                    >
+                      更换图片
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="upload-dropzone"
+                    onClick={() => imageUploadRef.current?.click()}
+                    disabled={uploadState.status === "uploading"}
+                  >
+                    点击上传图片
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="grid">
+            <div className="field">
+              <label>视频时长</label>
+              <div className="segmented-control" role="group" aria-label="视频时长">
+                {durations.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`segment ${form.duration === option.value ? "is-active" : ""}`}
+                    onClick={() => setForm((prev) => ({ ...prev, duration: option.value }))}
+                    aria-pressed={form.duration === option.value}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="field">
+              <label>画面比例</label>
+              <div className="segmented-control" role="group" aria-label="画面比例">
+                {aspectRatios.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`segment ${
+                      form.aspect_ratio === option.value ? "is-active" : ""
+                    }`}
+                    onClick={() =>
+                      setForm((prev) => ({ ...prev, aspect_ratio: option.value }))
+                    }
+                    aria-pressed={form.aspect_ratio === option.value}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="batch-toggle">
+            <div>
+              <span className="toggle-title">批量模式</span>
+            </div>
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={batchMode}
+                onChange={(event) => setBatchMode(event.target.checked)}
+              />
+              <span className="slider" />
+            </label>
+          </div>
+
+          {batchMode && (
+            <div className="field">
+              <label htmlFor="batch_count">生成数量 (Batch Size)</label>
+              <input
+                id="batch_count"
+                name="batch_count"
+                type="range"
+                min="1"
+                max="20"
+                value={batchCount}
+                onChange={(event) => setBatchCount(Number(event.target.value))}
+              />
+              <small className="helper">当前数量: {batchCount}</small>
+            </div>
+          )}
+
+          {error && <p className="error">{error}</p>}
+
+          {batchResult && (
+            <div className="batch-result">
+              <p>
+                批量提交完成：成功 {batchResult.successCount} 条，失败{" "}
+                {batchResult.failureCount} 条。
+              </p>
+              {batchResult.failureCount > 0 && (
+                <ul>
+                  {batchResult.failures.map((failure) => (
+                    <li key={failure.index}>
+                      任务 #{failure.index + 1}: {failure.error}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <button className="primary" type="submit" disabled={loading}>
+            {loading
+              ? batchMode
+                ? "批量提交中..."
+                : "生成中..."
+              : batchMode
+                ? "提交批量任务"
+                : "立即生成"}
+          </button>
+        </form>
+      </div>
+      <div className="generate-right">
+        <div className="preview-section">
+          <div className="preview-header">
+            <div>
+              <h2>视频预览</h2>
+              <p className="muted">展示最近生成的视频结果。</p>
+            </div>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => fetchHistory()}
+              disabled={historyLoading || !token}
+            >
+              {historyLoading ? "刷新中..." : "刷新"}
+            </button>
+          </div>
+          {latestVideo ? (
+            <video controls src={previewUrl} className="preview-player" />
+          ) : (
+            <div className="preview-empty">
+              <p className="muted">暂无可预览的视频，生成完成后会出现在这里。</p>
+            </div>
+          )}
+          {isQueuedOrRunning ? (
+            <div className="progress-container">
+              <div
+                className="progress-bar-fill"
+                style={{ width: `${simulatedProgress}%` }}
+              ></div>
+              <span className="progress-text">{Math.floor(simulatedProgress)}%</span>
+            </div>
+          ) : statusLabel ? (
+            <p className="muted">{statusLabel}</p>
+          ) : null}
+          <div className="preview-actions">
+            <button
+              className="preview-action"
+              type="button"
+              onClick={() => handleDownload(previewUrl)}
+              disabled={!previewUrl}
+            >
+              下载视频
+            </button>
+            <button
+              className="preview-action"
+              type="button"
+              onClick={() => handleCopyPreviewPrompt(previewPrompt)}
+              disabled={!previewPrompt}
+            >
+              {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const [form, setForm] = useState(initialForm);
   const [batchMode, setBatchMode] = useState(false);
@@ -60,6 +315,7 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [activeTab, setActiveTab] = useState("generate");
   const [previewVideo, setPreviewVideo] = useState(null);
+  const [simulatedProgress, setSimulatedProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
@@ -390,8 +646,26 @@ export default function App() {
     () => history.find((task) => task.video_url || task.origin_video_url),
     [history]
   );
+  const previewTask = useMemo(() => history[0] || null, [history]);
   const previewUrl = latestVideo?.video_url || latestVideo?.origin_video_url;
   const previewPrompt = latestVideo?.prompt;
+
+  useEffect(() => {
+    if (!previewTask || !["queued", "running"].includes(previewTask.status)) {
+      setSimulatedProgress(0);
+      return undefined;
+    }
+
+    let current = formatProgress(previewTask.progress) ?? 0;
+    setSimulatedProgress(current);
+
+    const interval = setInterval(() => {
+      current = Math.min(current + Math.random() * 4 + 1, 99);
+      setSimulatedProgress(current);
+    }, 800);
+
+    return () => clearInterval(interval);
+  }, [previewTask?.localTaskId, previewTask?.progress, previewTask?.status]);
 
   return (
     <div className="app-layout">
@@ -433,218 +707,36 @@ export default function App() {
         <header className="app-header">YKF-AI 视频生成平台</header>
         <main className="main-content">
           {activeTab === "generate" ? (
-            <section className="generate-view">
-              <div className="generate-left">
-                <form className="form form-section" onSubmit={handleSubmit}>
-                  <div className="field">
-                    <label htmlFor="mode">生成模式</label>
-                    <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
-                      <option value="t2v">文生视频</option>
-                      <option value="i2v">图生视频</option>
-                    </select>
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor="prompt">提示词</label>
-                    <textarea
-                      id="prompt"
-                      name="prompt"
-                      rows="4"
-                      placeholder="描述你想生成的视频内容，例如：可爱的小狗在海边奔跑"
-                      value={form.prompt}
-                      onChange={handleChange}
-                    />
-                  </div>
-
-                {form.mode === "i2v" && (
-                  <div className="field">
-                    <label htmlFor="image_upload">参考图上传</label>
-                    <div className="upload">
-                      <input
-                        id="image_upload"
-                        name="image_upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleUpload}
-                        disabled={uploadState.status === "uploading"}
-                        ref={imageUploadRef}
-                        className="upload-input"
-                      />
-                      {form.image_url ? (
-                        <div className="image-preview">
-                          <img src={form.image_url} alt="上传预览" />
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() => imageUploadRef.current?.click()}
-                            disabled={uploadState.status === "uploading"}
-                          >
-                            更换图片
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="upload-dropzone"
-                          onClick={() => imageUploadRef.current?.click()}
-                          disabled={uploadState.status === "uploading"}
-                        >
-                          点击上传图片
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                  <div className="grid">
-                    <div className="field">
-                      <label>视频时长</label>
-                      <div className="segmented-control" role="group" aria-label="视频时长">
-                        {durations.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={`segment ${
-                              form.duration === option.value ? "is-active" : ""
-                            }`}
-                            onClick={() =>
-                              setForm((prev) => ({ ...prev, duration: option.value }))
-                            }
-                            aria-pressed={form.duration === option.value}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="field">
-                      <label>画面比例</label>
-                      <div className="segmented-control" role="group" aria-label="画面比例">
-                        {aspectRatios.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={`segment ${
-                              form.aspect_ratio === option.value ? "is-active" : ""
-                            }`}
-                            onClick={() =>
-                              setForm((prev) => ({ ...prev, aspect_ratio: option.value }))
-                            }
-                            aria-pressed={form.aspect_ratio === option.value}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="batch-toggle">
-                    <div>
-                      <span className="toggle-title">批量模式</span>
-                    </div>
-                    <label className="switch">
-                      <input
-                        type="checkbox"
-                        checked={batchMode}
-                        onChange={(event) => setBatchMode(event.target.checked)}
-                      />
-                      <span className="slider" />
-                    </label>
-                  </div>
-
-                  {batchMode && (
-                    <div className="field">
-                      <label htmlFor="batch_count">生成数量 (Batch Size)</label>
-                      <input
-                        id="batch_count"
-                        name="batch_count"
-                        type="range"
-                        min="1"
-                        max="20"
-                        value={batchCount}
-                        onChange={(event) => setBatchCount(Number(event.target.value))}
-                      />
-                      <small className="helper">当前数量: {batchCount}</small>
-                    </div>
-                  )}
-
-                  {error && <p className="error">{error}</p>}
-
-                  {batchResult && (
-                    <div className="batch-result">
-                      <p>
-                        批量提交完成：成功 {batchResult.successCount} 条，失败{" "}
-                        {batchResult.failureCount} 条。
-                      </p>
-                      {batchResult.failureCount > 0 && (
-                        <ul>
-                          {batchResult.failures.map((failure) => (
-                            <li key={failure.index}>
-                              任务 #{failure.index + 1}: {failure.error}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-
-                  <button className="primary" type="submit" disabled={loading}>
-                    {loading
-                      ? batchMode
-                        ? "批量提交中..."
-                        : "生成中..."
-                      : batchMode
-                        ? "提交批量任务"
-                        : "立即生成"}
-                  </button>
-                </form>
-            </div>
-            <div className="generate-right">
-              <div className="preview-section">
-                <div className="preview-header">
-                  <div>
-                    <h2>视频预览</h2>
-                    <p className="muted">展示最近生成的视频结果。</p>
-                  </div>
-                  <button
-                    className="ghost"
-                    type="button"
-                    onClick={() => fetchHistory()}
-                    disabled={historyLoading || !token}
-                  >
-                    {historyLoading ? "刷新中..." : "刷新"}
-                  </button>
-                </div>
-                {latestVideo ? (
-                  <video controls src={previewUrl} className="preview-player" />
-                ) : (
-                  <div className="preview-empty">
-                    <p className="muted">暂无可预览的视频，生成完成后会出现在这里。</p>
-                  </div>
-                )}
-                <div className="preview-actions">
-                  <button
-                    className="preview-action"
-                    type="button"
-                    onClick={() => handleDownload(previewUrl)}
-                    disabled={!previewUrl}
-                  >
-                    下载视频
-                  </button>
-                  <button
-                    className="preview-action"
-                    type="button"
-                    onClick={() => handleCopyPreviewPrompt(previewPrompt)}
-                    disabled={!previewPrompt}
-                  >
-                    {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : (
+            <GenerateView
+              form={form}
+              handleSubmit={handleSubmit}
+              handleChange={handleChange}
+              handleUpload={handleUpload}
+              uploadState={uploadState}
+              imageUploadRef={imageUploadRef}
+              durations={durations}
+              aspectRatios={aspectRatios}
+              setForm={setForm}
+              batchMode={batchMode}
+              setBatchMode={setBatchMode}
+              batchCount={batchCount}
+              setBatchCount={setBatchCount}
+              error={error}
+              batchResult={batchResult}
+              loading={loading}
+              latestVideo={latestVideo}
+              previewUrl={previewUrl}
+              previewPrompt={previewPrompt}
+              handleDownload={handleDownload}
+              handleCopyPreviewPrompt={handleCopyPreviewPrompt}
+              copiedPreviewPrompt={copiedPreviewPrompt}
+              historyLoading={historyLoading}
+              token={token}
+              fetchHistory={fetchHistory}
+              previewTask={previewTask}
+              simulatedProgress={simulatedProgress}
+            />
+          ) : (
           <section className="history-view">
             <div className="history-header">
               <div>
