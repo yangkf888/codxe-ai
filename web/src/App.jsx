@@ -773,14 +773,13 @@ export default function App() {
         throw new Error(data.error || "上传图片失败");
       }
       const data = await response.json();
-      const fileUrl = data?.fileUrl || data?.data?.fileUrl || data?.url;
-      if (fileUrl) {
-        setForm((prev) => ({ ...prev, image_url: fileUrl }));
-        setUploadState({ status: "success", message: "上传完成", fileName: file.name });
-        setError("");
-      } else {
-        setUploadState({ status: "error", message: "上传失败", fileName: file.name });
+      const imageUrl = data?.url;
+      if (!imageUrl) {
+        throw new Error("上传图片失败");
       }
+      setForm((prev) => ({ ...prev, image_url: imageUrl }));
+      setUploadState({ status: "success", message: "上传完成", fileName: file.name });
+      setError("");
     } catch (err) {
       setError(err.message || "上传图片失败");
       setUploadState({ status: "error", message: "上传失败", fileName: file.name });
