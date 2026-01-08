@@ -380,6 +380,7 @@ export default function App() {
     () => history.find((task) => task.video_url || task.origin_video_url),
     [history]
   );
+  const previewUrl = latestVideo?.video_url || latestVideo?.origin_video_url;
 
   return (
     <div className="app-layout">
@@ -606,11 +607,7 @@ export default function App() {
                   </button>
                 </div>
                 {latestVideo ? (
-                  <video
-                    controls
-                    src={latestVideo.video_url || latestVideo.origin_video_url}
-                    className="preview-player"
-                  />
+                  <video controls src={previewUrl} className="preview-player" />
                 ) : (
                   <div className="preview-empty">
                     <p className="muted">暂无可预览的视频，生成完成后会出现在这里。</p>
@@ -618,30 +615,22 @@ export default function App() {
                 )}
                 <div className="preview-actions">
                   <button
-                    className="secondary"
+                    className="preview-action"
                     type="button"
-                    onClick={() =>
-                      handleDownload(latestVideo?.video_url || latestVideo?.origin_video_url)
-                    }
-                    disabled={!latestVideo?.video_url && !latestVideo?.origin_video_url}
+                    onClick={() => handleDownload(previewUrl)}
+                    disabled={!previewUrl}
                   >
                     下载视频
                   </button>
                   <button
-                    className="secondary"
+                    className="preview-action"
                     type="button"
-                    onClick={async () => {
-                      const copied = await handleCopy(latestVideo?.prompt);
-                      if (copied) {
-                        setNotice("提示词已复制");
-                      }
-                    }}
-                    disabled={!latestVideo?.prompt}
+                    onClick={() => handleCopy(previewUrl)}
+                    disabled={!previewUrl}
                   >
-                    复制提示词
+                    复制链接
                   </button>
                 </div>
-                {notice && <p className="notice">{notice}</p>}
               </div>
             </div>
           </section>

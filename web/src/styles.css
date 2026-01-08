@@ -333,10 +333,11 @@ select {
   border: 1px solid #334155;
   border-radius: 12px;
   padding: 6px;
+  width: 100%;
 }
 
 .segment {
-  flex: 1;
+  flex: 1 1 0;
   background: transparent;
   padding: 6px 8px;
   border-radius: 8px;
@@ -344,6 +345,7 @@ select {
   font-weight: 600;
   color: #94a3b8;
   min-width: 0;
+  text-align: center;
 }
 
 .segment.is-active {
@@ -391,6 +393,23 @@ select {
   color: #e2e8f0;
 }
 
+.btn-delete {
+  color: #fca5a5;
+  font-weight: 600;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.btn-delete:hover {
+  color: #f87171;
+  transform: translateY(-1px);
+}
+
+.btn-delete:disabled {
+  color: #7f1d1d;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .secondary:disabled,
 .secondary.disabled {
   opacity: 0.6;
@@ -432,6 +451,37 @@ select {
   width: 100%;
   border-radius: 12px;
   background: #0f172a;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.preview-action {
+  flex: 1 1 0;
+  min-width: 120px;
+  text-align: center;
+  border: 1px solid #334155;
+  background: #0f172a;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #e2e8f0;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.preview-action:hover {
+  background: #1e293b;
+  border-color: #475569;
+}
+
+.preview-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .preview-empty {
