@@ -130,6 +130,7 @@ button {
   font-size: 20px;
   font-weight: 700;
   color: #f8fafc;
+  position: relative;
 }
 
 .app-header__info {
@@ -146,6 +147,12 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  max-width: calc(100% - 320px);
 }
 
 .logout-button {
