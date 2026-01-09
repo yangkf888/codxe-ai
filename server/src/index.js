@@ -75,11 +75,14 @@ const getRequestBaseUrl = (req) => {
   if (!req) {
     return "";
   }
-  const host = req.get("host");
+  const forwardedHost = req.get("x-forwarded-host");
+  const host = forwardedHost || req.get("host");
   if (!host) {
     return "";
   }
-  return `${req.protocol}://${host}`.replace(/\/+$/, "");
+  const forwardedProto = req.get("x-forwarded-proto");
+  const protocol = forwardedProto ? forwardedProto.split(",")[0].trim() : req.protocol;
+  return `${protocol}://${host}`.replace(/\/+$/, "");
 };
 
 const ensureAbsoluteUrl = (value, baseUrl) => {
@@ -387,9 +390,10 @@ const createOne = async (job = {}, { baseUrl = "" } = {}) => {
     input.character_id_list = character_id_list;
   }
 
+  const callbackBaseUrl = baseUrl || getPublicBaseUrl();
   const taskPayload = {
     model,
-    callBackUrl: `${PUBLIC_BASE_URL}/api/callback`,
+    callBackUrl: callbackBaseUrl ? `${callbackBaseUrl}/api/callback` : "",
     input
   };
 
