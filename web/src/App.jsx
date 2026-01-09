@@ -9,11 +9,33 @@ const initialForm = {
   aspect_ratio: "9:16"
 };
 
+const imageModels = [
+  {
+    value: "google/nano-banana",
+    label: "Nano Banana",
+    description: "文生图"
+  },
+  {
+    value: "google/nano-banana-edit",
+    label: "Nano Banana Edit",
+    description: "图片编辑"
+  },
+  {
+    value: "nano-banana-pro",
+    label: "Nano Banana Pro",
+    description: "高级生成"
+  }
+];
+
 const initialImageForm = {
+  model: "google/nano-banana",
   prompt: "",
+  image_size: "1:1",
   aspect_ratio: "1:1",
   resolution: "1K",
-  output_format: "png"
+  output_format: "png",
+  image_urls: [],
+  image_input: []
 };
 
 const statusLabels = {
@@ -38,12 +60,32 @@ const aspectRatios = [
   { value: "16:9", label: "横屏 (16:9)" }
 ];
 
+const imageSizeOptions = [
+  { value: "1:1", label: "正方形 (1:1)" },
+  { value: "9:16", label: "竖屏 (9:16)" },
+  { value: "16:9", label: "横屏 (16:9)" },
+  { value: "3:4", label: "竖向 (3:4)" },
+  { value: "4:3", label: "横向 (4:3)" },
+  { value: "3:2", label: "横向 (3:2)" },
+  { value: "2:3", label: "竖向 (2:3)" },
+  { value: "5:4", label: "横向 (5:4)" },
+  { value: "4:5", label: "竖向 (4:5)" },
+  { value: "21:9", label: "超宽 (21:9)" },
+  { value: "auto", label: "自动" }
+];
+
 const imageAspectRatios = [
   { value: "1:1", label: "正方形 (1:1)" },
-  { value: "4:3", label: "横向 (4:3)" },
+  { value: "2:3", label: "竖向 (2:3)" },
+  { value: "3:2", label: "横向 (3:2)" },
   { value: "3:4", label: "竖向 (3:4)" },
+  { value: "4:3", label: "横向 (4:3)" },
+  { value: "4:5", label: "竖向 (4:5)" },
+  { value: "5:4", label: "横向 (5:4)" },
+  { value: "9:16", label: "竖屏 (9:16)" },
   { value: "16:9", label: "宽屏 (16:9)" },
-  { value: "9:16", label: "竖屏 (9:16)" }
+  { value: "21:9", label: "超宽 (21:9)" },
+  { value: "auto", label: "自动" }
 ];
 
 const imageResolutions = [
@@ -53,6 +95,11 @@ const imageResolutions = [
 ];
 
 const imageFormats = [
+  { value: "png", label: "PNG" },
+  { value: "jpeg", label: "JPEG" }
+];
+
+const imageProFormats = [
   { value: "png", label: "PNG" },
   { value: "jpg", label: "JPG" }
 ];
@@ -427,6 +474,10 @@ function ImageGenerateView({
   form,
   handleSubmit,
   handleChange,
+  handleUpload,
+  handleRemoveUpload,
+  handleClearUploads,
+  uploadState,
   loading,
   error,
   latestImage,
@@ -437,8 +488,16 @@ function ImageGenerateView({
   copiedPreviewPrompt,
   historyLoading,
   token,
-  fetchHistory
+  fetchHistory,
+  uploadRef
 }) {
+  const isEditModel = form.model === "google/nano-banana-edit";
+  const isProModel = form.model === "nano-banana-pro";
+  const supportsImageUpload = isEditModel || isProModel;
+  const imageAssets = isProModel ? form.image_input : form.image_urls;
+  const imageUploadLimit = isEditModel ? 10 : 8;
+  const outputFormats = isProModel ? imageProFormats : imageFormats;
+
   return (
     <section className="generate-view">
       <div className="generate-left">
@@ -446,6 +505,30 @@ function ImageGenerateView({
           <h1>图片生成</h1>
         </div>
         <form className="form form-section" onSubmit={handleSubmit}>
+          <div className="field">
+            <label>模型类型</label>
+            <div className="segmented-control" role="group" aria-label="模型类型">
+              {imageModels.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`segment ${form.model === option.value ? "is-active" : ""}`}
+                  onClick={() =>
+                    handleChange({
+                      target: { name: "model", value: option.value }
+                    })
+                  }
+                  aria-pressed={form.model === option.value}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="muted">
+              {imageModels.find((option) => option.value === form.model)?.description}
+            </p>
+          </div>
+
           <div className="field">
             <label htmlFor="image_prompt">提示词</label>
             <textarea
@@ -458,57 +541,146 @@ function ImageGenerateView({
             />
           </div>
 
+          {supportsImageUpload && (
+            <div className="field">
+              <label>参考图上传</label>
+              <div className="upload">
+                <input
+                  id="image_asset_upload"
+                  name="image_asset_upload"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleUpload}
+                  disabled={uploadState.status === "uploading"}
+                  ref={uploadRef}
+                  className="upload-input"
+                />
+                <button
+                  type="button"
+                  className="upload-dropzone"
+                  onClick={() => uploadRef.current?.click()}
+                  disabled={uploadState.status === "uploading"}
+                >
+                  {uploadState.status === "uploading" ? "上传中..." : "选择图片"}
+                </button>
+                <p className="muted">
+                  {isEditModel
+                    ? "支持最多 10 张参考图，生成时会强制使用参考图。"
+                    : "支持最多 8 张参考图（可选）。"}
+                </p>
+                {imageAssets.length > 0 && (
+                  <>
+                    <div className="image-upload-grid">
+                      {imageAssets.map((url, index) => (
+                        <div key={`${url}-${index}`} className="image-upload-card">
+                          <img src={url} alt={`参考图 ${index + 1}`} loading="lazy" />
+                          <button
+                            className="secondary"
+                            type="button"
+                            onClick={() => handleRemoveUpload(index)}
+                          >
+                            移除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="image-upload-actions">
+                      <span className="muted">
+                        已上传 {imageAssets.length}/{imageUploadLimit}
+                      </span>
+                      <button
+                        className="secondary"
+                        type="button"
+                        onClick={handleClearUploads}
+                      >
+                        清空
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="field">
             <label>图片参数</label>
             <div className="grid">
-              <div className="field">
-                <label>画面比例</label>
-                <div className="segmented-control" role="group" aria-label="画面比例">
-                  {imageAspectRatios.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`segment ${
-                        form.aspect_ratio === option.value ? "is-active" : ""
-                      }`}
-                      onClick={() =>
-                        handleChange({
-                          target: { name: "aspect_ratio", value: option.value }
-                        })
-                      }
-                      aria-pressed={form.aspect_ratio === option.value}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+              {isProModel ? (
+                <>
+                  <div className="field">
+                    <label>画面比例</label>
+                    <div className="segmented-control" role="group" aria-label="画面比例">
+                      {imageAspectRatios.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`segment ${
+                            form.aspect_ratio === option.value ? "is-active" : ""
+                          }`}
+                          onClick={() =>
+                            handleChange({
+                              target: { name: "aspect_ratio", value: option.value }
+                            })
+                          }
+                          aria-pressed={form.aspect_ratio === option.value}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label>分辨率</label>
+                    <div className="segmented-control" role="group" aria-label="分辨率">
+                      {imageResolutions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`segment ${
+                            form.resolution === option.value ? "is-active" : ""
+                          }`}
+                          onClick={() =>
+                            handleChange({
+                              target: { name: "resolution", value: option.value }
+                            })
+                          }
+                          aria-pressed={form.resolution === option.value}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="field">
+                  <label>画面比例</label>
+                  <div className="segmented-control" role="group" aria-label="画面比例">
+                    {imageSizeOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`segment ${
+                          form.image_size === option.value ? "is-active" : ""
+                        }`}
+                        onClick={() =>
+                          handleChange({
+                            target: { name: "image_size", value: option.value }
+                          })
+                        }
+                        aria-pressed={form.image_size === option.value}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="field">
-                <label>分辨率</label>
-                <div className="segmented-control" role="group" aria-label="分辨率">
-                  {imageResolutions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`segment ${
-                        form.resolution === option.value ? "is-active" : ""
-                      }`}
-                      onClick={() =>
-                        handleChange({
-                          target: { name: "resolution", value: option.value }
-                        })
-                      }
-                      aria-pressed={form.resolution === option.value}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              )}
               <div className="field">
                 <label>输出格式</label>
                 <div className="segmented-control" role="group" aria-label="输出格式">
-                  {imageFormats.map((option) => (
+                  {outputFormats.map((option) => (
                     <button
                       key={option.value}
                       type="button"
@@ -928,6 +1100,11 @@ export default function App() {
   const [imageHistoryLoading, setImageHistoryLoading] = useState(false);
   const [error, setError] = useState("");
   const [imageError, setImageError] = useState("");
+  const [imageUploadState, setImageUploadState] = useState({
+    status: "idle",
+    message: "",
+    fileName: ""
+  });
   const [copiedPromptId, setCopiedPromptId] = useState(null);
   const [copiedPreviewPrompt, setCopiedPreviewPrompt] = useState(false);
   const [copiedImagePromptId, setCopiedImagePromptId] = useState(null);
@@ -954,6 +1131,7 @@ export default function App() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [localImagePreviewUrl, setLocalImagePreviewUrl] = useState("");
   const imageUploadRef = useRef(null);
+  const imageAssetUploadRef = useRef(null);
   const copiedPromptTimeoutRef = useRef(null);
   const copiedPreviewTimeoutRef = useRef(null);
   const copiedImagePromptTimeoutRef = useRef(null);
@@ -1270,6 +1448,20 @@ export default function App() {
 
   const handleImageChange = (event) => {
     const { name, value } = event.target;
+    if (name === "model") {
+      setImageForm((prev) => ({
+        ...prev,
+        model: value,
+        image_size: "1:1",
+        aspect_ratio: "1:1",
+        resolution: "1K",
+        output_format: "png",
+        image_urls: [],
+        image_input: []
+      }));
+      setImageUploadState({ status: "idle", message: "", fileName: "" });
+      return;
+    }
     setImageForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -1431,6 +1623,7 @@ export default function App() {
     setAccountForm({ currentPassword: "", username: "", password: "" });
     setAccountStatus({ loading: false, error: "", success: "" });
     setImageForm(initialImageForm);
+    setImageUploadState({ status: "idle", message: "", fileName: "" });
   };
 
   const handleUpload = async (event) => {
@@ -1474,6 +1667,86 @@ export default function App() {
     } finally {
       event.target.value = "";
     }
+  };
+
+  const handleImageAssetUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) {
+      setImageUploadState({ status: "idle", message: "", fileName: "" });
+      return;
+    }
+
+    const isProModel = imageForm.model === "nano-banana-pro";
+    const targetKey = isProModel ? "image_input" : "image_urls";
+    const maxCount = isProModel ? 8 : 10;
+    const existing = imageForm[targetKey] || [];
+    const remaining = Math.max(maxCount - existing.length, 0);
+
+    if (remaining === 0) {
+      setImageError("已达到可上传图片上限。");
+      event.target.value = "";
+      return;
+    }
+
+    const pendingFiles = files.slice(0, remaining);
+    setImageUploadState({
+      status: "uploading",
+      message: `上传中 (${pendingFiles.length})`,
+      fileName: pendingFiles[0]?.name || ""
+    });
+    setImageError("");
+
+    const uploadedUrls = [];
+    try {
+      for (const file of pendingFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          headers: token ? { "X-APP-TOKEN": token } : {},
+          body: formData
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "上传图片失败");
+        }
+        const data = await response.json();
+        const imageUrl = data?.url;
+        if (!imageUrl) {
+          throw new Error("上传图片失败");
+        }
+        uploadedUrls.push(imageUrl);
+      }
+
+      if (uploadedUrls.length > 0) {
+        setImageForm((prev) => ({
+          ...prev,
+          [targetKey]: [...prev[targetKey], ...uploadedUrls]
+        }));
+      }
+      setImageUploadState({ status: "success", message: "上传完成", fileName: "" });
+    } catch (err) {
+      setImageError(err.message || "上传图片失败");
+      setImageUploadState({ status: "error", message: "上传失败", fileName: "" });
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const handleRemoveImageAsset = (index) => {
+    const isProModel = imageForm.model === "nano-banana-pro";
+    const targetKey = isProModel ? "image_input" : "image_urls";
+    setImageForm((prev) => {
+      const nextAssets = [...prev[targetKey]];
+      nextAssets.splice(index, 1);
+      return { ...prev, [targetKey]: nextAssets };
+    });
+  };
+
+  const handleClearImageAssets = () => {
+    const isProModel = imageForm.model === "nano-banana-pro";
+    const targetKey = isProModel ? "image_input" : "image_urls";
+    setImageForm((prev) => ({ ...prev, [targetKey]: [] }));
   };
 
   const handleSubmit = async (event) => {
@@ -1610,21 +1883,39 @@ export default function App() {
       return;
     }
 
+    if (imageForm.model === "google/nano-banana-edit" && imageForm.image_urls.length === 0) {
+      setImageError("请先上传参考图。");
+      return;
+    }
+
     setImageLoading(true);
 
     try {
+      const payload = {
+        model: imageForm.model,
+        prompt: imageForm.prompt.trim()
+      };
+
+      if (imageForm.model === "nano-banana-pro") {
+        payload.aspect_ratio = imageForm.aspect_ratio;
+        payload.resolution = imageForm.resolution;
+        payload.output_format = imageForm.output_format;
+        payload.image_input = imageForm.image_input;
+      } else {
+        payload.image_size = imageForm.image_size;
+        payload.output_format = imageForm.output_format;
+        if (imageForm.model === "google/nano-banana-edit") {
+          payload.image_urls = imageForm.image_urls;
+        }
+      }
+
       const response = await fetch("/api/image/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { "X-APP-TOKEN": token } : {})
         },
-        body: JSON.stringify({
-          prompt: imageForm.prompt.trim(),
-          aspect_ratio: imageForm.aspect_ratio,
-          resolution: imageForm.resolution,
-          output_format: imageForm.output_format
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -1817,6 +2108,10 @@ export default function App() {
               form={imageForm}
               handleSubmit={handleImageSubmit}
               handleChange={handleImageChange}
+              handleUpload={handleImageAssetUpload}
+              handleRemoveUpload={handleRemoveImageAsset}
+              handleClearUploads={handleClearImageAssets}
+              uploadState={imageUploadState}
               loading={imageLoading}
               error={imageError}
               latestImage={latestImage}
@@ -1828,6 +2123,7 @@ export default function App() {
               historyLoading={imageHistoryLoading}
               token={token}
               fetchHistory={fetchImageHistory}
+              uploadRef={imageAssetUploadRef}
             />
           ) : activeTab === "history" ? (
             <HistoryView

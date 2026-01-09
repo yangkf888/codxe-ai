@@ -361,9 +361,39 @@ const aspectRatioMap = {
   square: "square"
 };
 
-const imageAspectRatios = new Set(["1:1", "16:9", "9:16", "4:3", "3:4"]);
+const imageAspectRatios = new Set([
+  "1:1",
+  "2:3",
+  "3:2",
+  "3:4",
+  "4:3",
+  "4:5",
+  "5:4",
+  "9:16",
+  "16:9",
+  "21:9",
+  "auto"
+]);
 const imageResolutions = new Set(["1K", "2K", "4K"]);
-const imageOutputFormats = new Set(["png", "PNG", "jpg", "JPG"]);
+const imageOutputFormats = new Set(["png", "jpg", "jpeg"]);
+const imageSizeOptions = new Set([
+  "1:1",
+  "9:16",
+  "16:9",
+  "3:4",
+  "4:3",
+  "3:2",
+  "2:3",
+  "5:4",
+  "4:5",
+  "21:9",
+  "auto"
+]);
+const imageModels = new Set([
+  "google/nano-banana",
+  "google/nano-banana-edit",
+  "nano-banana-pro"
+]);
 
 const frameMap = {
   5: "10",
@@ -540,35 +570,82 @@ const createOne = async (job = {}, { baseUrl = "" } = {}) => {
 };
 
 const createImageTask = async (payload = {}, { baseUrl = "" } = {}) => {
-  const { prompt, aspect_ratio = "1:1", resolution = "1K", output_format = "png" } = payload;
+  const {
+    model: rawModel,
+    prompt,
+    image_size = "1:1",
+    output_format = "png",
+    aspect_ratio = "1:1",
+    resolution = "1K",
+    image_urls,
+    image_input
+  } = payload;
 
   if (!prompt || !String(prompt).trim()) {
     throw new ApiError(400, "Missing prompt");
   }
 
-  if (!imageAspectRatios.has(aspect_ratio)) {
-    throw new ApiError(400, "Invalid aspect_ratio");
+  const model = (rawModel || process.env.KIE_IMAGE_MODEL || "nano-banana-pro").trim();
+  if (!imageModels.has(model)) {
+    throw new ApiError(400, "Invalid model");
   }
 
-  if (!imageResolutions.has(resolution)) {
-    throw new ApiError(400, "Invalid resolution");
-  }
-
-  if (!imageOutputFormats.has(output_format)) {
+  const normalizedOutputFormat = String(output_format).trim().toLowerCase();
+  if (!imageOutputFormats.has(normalizedOutputFormat)) {
     throw new ApiError(400, "Invalid output_format");
   }
 
-  const model = process.env.KIE_IMAGE_MODEL || "nano-banana-pro";
   const callbackBaseUrl = baseUrl || getPublicBaseUrl();
+  const input = {
+    prompt: String(prompt).trim()
+  };
+
+  if (model === "google/nano-banana" || model === "google/nano-banana-edit") {
+    if (!imageSizeOptions.has(image_size)) {
+      throw new ApiError(400, "Invalid image_size");
+    }
+    if (!["png", "jpeg"].includes(normalizedOutputFormat)) {
+      throw new ApiError(400, "Invalid output_format");
+    }
+    input.output_format = normalizedOutputFormat;
+    input.image_size = image_size;
+
+    if (model === "google/nano-banana-edit") {
+      const resolvedImageUrls = resolveImageUrls(null, image_urls, baseUrl);
+      if (resolvedImageUrls.length === 0) {
+        throw new ApiError(400, "image_urls is required for nano-banana-edit");
+      }
+      input.image_urls = resolvedImageUrls;
+    }
+  }
+
+  if (model === "nano-banana-pro") {
+    if (!imageAspectRatios.has(aspect_ratio)) {
+      throw new ApiError(400, "Invalid aspect_ratio");
+    }
+
+    if (!imageResolutions.has(resolution)) {
+      throw new ApiError(400, "Invalid resolution");
+    }
+
+    if (!["png", "jpg"].includes(normalizedOutputFormat)) {
+      throw new ApiError(400, "Invalid output_format");
+    }
+
+    input.aspect_ratio = aspect_ratio;
+    input.resolution = resolution;
+    input.output_format = normalizedOutputFormat;
+
+    const resolvedImageInputs = resolveImageUrls(null, image_input, baseUrl);
+    if (resolvedImageInputs.length > 0) {
+      input.image_input = resolvedImageInputs;
+    }
+  }
+
   const taskPayload = {
     model,
     callBackUrl: callbackBaseUrl ? `${callbackBaseUrl}/api/callback` : "",
-    input: {
-      prompt: String(prompt).trim(),
-      aspect_ratio,
-      resolution,
-      output_format
-    }
+    input
   };
 
   const kieTaskId = await kieClient.createTask(taskPayload);
@@ -586,10 +663,13 @@ const createImageTask = async (payload = {}, { baseUrl = "" } = {}) => {
     kieTaskId,
     params: {
       prompt: String(prompt).trim(),
+      image_size,
+      output_format: normalizedOutputFormat,
       aspect_ratio,
       resolution,
-      output_format,
-      model
+      model,
+      image_urls: Array.isArray(image_urls) ? image_urls : [],
+      image_input: Array.isArray(image_input) ? image_input : []
     }
   };
 
