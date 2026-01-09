@@ -2194,7 +2194,7 @@ export default function App() {
           <div className="app-header__info">
             <span>YKF-AI 创作中心</span>
             <span className="app-header__announcement" aria-live="polite">
-              ⚠️ 本站仅供个人学习测试，严禁商用，生成内容请遵守当地法律法规。支持批量生成，最大批量20条
+              ⚠️ 本站仅供个人学习测试，严禁商用，生成内容请遵守当地法律法规。支持批量生成，最大批量20条。视频图片7天后自动删除，注意备份。
             </span>
           </div>
           <button className="ghost logout-button" type="button" onClick={handleLogout}>
