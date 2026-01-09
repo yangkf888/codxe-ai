@@ -216,7 +216,7 @@ button {
 }
 
 .generate-right {
-  overflow-y: auto;
+  overflow: hidden;
   padding-right: 12px;
 }
 
@@ -618,6 +618,7 @@ select {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  max-height: 100%;
   padding-right: 4px;
 }
 
@@ -637,8 +638,6 @@ select {
   flex: 1;
   min-height: 0;
   max-height: none;
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
 .preview-item {
