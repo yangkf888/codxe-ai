@@ -211,6 +211,7 @@ function GenerateView({
   latestVideo,
   previewUrl,
   previewPrompt,
+  history,
   handleDownload,
   handleCopyPreviewPrompt,
   copiedPreviewPrompt,
@@ -226,6 +227,7 @@ function GenerateView({
   const isQueuedOrRunning =
     previewTask && (previewTask.status === "queued" || previewTask.status === "running");
   const statusLabel = previewTask ? statusLabels[previewTask.status] || previewTask.status : "";
+  const recentHistory = history.slice(0, 10);
   const previewProgress = useMemo(() => {
     const actualProgress = formatProgress(previewTask?.progress);
     if (isQueuedOrRunning) {
@@ -418,6 +420,9 @@ function GenerateView({
             <div>
               <h2>视频预览</h2>
               <p className="muted">展示最近生成的视频结果。</p>
+              <p className="muted preview-note">
+                本页面仅显示最近 10 次记录，更多记录请到历史记录中查看。
+              </p>
             </div>
             <button
               className="ghost"
@@ -428,13 +433,15 @@ function GenerateView({
               {historyLoading ? "刷新中..." : "刷新"}
             </button>
           </div>
-          {latestVideo ? (
-            <video controls src={previewUrl} className="preview-player" />
-          ) : (
-            <div className="preview-empty">
-              <p className="muted">暂无可预览的视频，生成完成后会出现在这里。</p>
-            </div>
-          )}
+          <div className="preview-media">
+            {latestVideo ? (
+              <video controls src={previewUrl} className="preview-player" />
+            ) : (
+              <div className="preview-empty">
+                <p className="muted">暂无可预览的视频，生成完成后会出现在这里。</p>
+              </div>
+            )}
+          </div>
           {isQueuedOrRunning ? (
             <div className="progress-container">
               <div
@@ -464,6 +471,37 @@ function GenerateView({
               {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
             </button>
           </div>
+          <div className="preview-list">
+            {recentHistory.length > 0 ? (
+              recentHistory.map((task) => {
+                const taskPreviewUrl = task.origin_video_url || task.video_url;
+                return (
+                  <div key={task.localTaskId} className="preview-item">
+                    <div className="preview-thumb">
+                      {taskPreviewUrl ? (
+                        <video src={taskPreviewUrl} muted playsInline />
+                      ) : (
+                        <div className="preview-thumb-empty">暂无预览</div>
+                      )}
+                    </div>
+                    <div className="preview-meta">
+                      <div className="preview-prompt">{formatPrompt(task.prompt)}</div>
+                      <div className="preview-meta-line">
+                        <span>{formatTimestamp(task.createdAt)}</span>
+                        <span className={`status status-${task.status}`}>
+                          {statusLabels[task.status] || task.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="preview-empty">
+                <p className="muted">暂无生成记录，先提交任务试试吧。</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>
@@ -490,7 +528,8 @@ function ImageGenerateView({
   historyLoading,
   token,
   fetchHistory,
-  uploadRef
+  uploadRef,
+  history
 }) {
   const isEditModel = form.model === "google/nano-banana-edit";
   const isProModel = form.model === "nano-banana-pro";
@@ -498,6 +537,7 @@ function ImageGenerateView({
   const imageAssets = isProModel ? form.image_input : form.image_urls;
   const imageUploadLimit = isEditModel ? 10 : 8;
   const outputFormats = isProModel ? imageProFormats : imageFormats;
+  const recentHistory = history.slice(0, 10);
 
   return (
     <section className="generate-view">
@@ -689,6 +729,9 @@ function ImageGenerateView({
             <div>
               <h2>图片预览</h2>
               <p className="muted">展示最近生成的图片结果。</p>
+              <p className="muted preview-note">
+                本页面仅显示最近 10 次记录，更多记录请到图片历史中查看。
+              </p>
             </div>
             <button
               className="ghost"
@@ -699,13 +742,15 @@ function ImageGenerateView({
               {historyLoading ? "刷新中..." : "刷新"}
             </button>
           </div>
-          {latestImage ? (
-            <img src={previewUrl} alt="生成预览" className="preview-image" />
-          ) : (
-            <div className="preview-empty">
-              <p className="muted">暂无可预览的图片，生成完成后会出现在这里。</p>
-            </div>
-          )}
+          <div className="preview-media">
+            {latestImage ? (
+              <img src={previewUrl} alt="生成预览" className="preview-image" />
+            ) : (
+              <div className="preview-empty">
+                <p className="muted">暂无可预览的图片，生成完成后会出现在这里。</p>
+              </div>
+            )}
+          </div>
           <div className="preview-actions">
             <button
               className="action-btn"
@@ -723,6 +768,34 @@ function ImageGenerateView({
             >
               {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
             </button>
+          </div>
+          <div className="preview-list">
+            {recentHistory.length > 0 ? (
+              recentHistory.map((task) => (
+                <div key={task.localTaskId} className="preview-item">
+                  <div className="preview-thumb">
+                    {task.image_url ? (
+                      <img src={task.image_url} alt="历史预览" />
+                    ) : (
+                      <div className="preview-thumb-empty">暂无预览</div>
+                    )}
+                  </div>
+                  <div className="preview-meta">
+                    <div className="preview-prompt">{formatPrompt(task.prompt)}</div>
+                    <div className="preview-meta-line">
+                      <span>{formatTimestamp(task.createdAt)}</span>
+                      <span className={`status status-${task.status}`}>
+                        {statusLabels[task.status] || task.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="preview-empty">
+                <p className="muted">暂无生成记录，先提交任务试试吧。</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2070,6 +2143,7 @@ export default function App() {
               latestVideo={latestVideo}
               previewUrl={previewUrl}
               previewPrompt={previewPrompt}
+              history={history}
               handleDownload={handleDownload}
               handleCopyPreviewPrompt={handleCopyPreviewPrompt}
               copiedPreviewPrompt={copiedPreviewPrompt}
@@ -2097,6 +2171,7 @@ export default function App() {
               latestImage={latestImage}
               previewUrl={previewImageUrl}
               previewPrompt={previewImagePrompt}
+              history={imageHistory}
               handleDownload={handleDownload}
               handleCopyPreviewPrompt={handleCopyImagePreviewPrompt}
               copiedPreviewPrompt={copiedImagePreviewPrompt}
