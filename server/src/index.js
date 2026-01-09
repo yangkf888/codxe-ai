@@ -396,7 +396,11 @@ app.use((req, res, next) => {
     return next();
   }
 
-  if (req.path === "/api/callback" || req.path === "/api/login") {
+  if (
+    req.path === "/api/callback" ||
+    req.path === "/api/login" ||
+    req.path.startsWith("/api/uploads")
+  ) {
     return next();
   }
 
