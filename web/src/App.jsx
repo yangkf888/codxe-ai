@@ -520,7 +520,7 @@ function AdminView({
         <p className="muted">管理管理员账号与近期上传图片。</p>
       </div>
       <div className="admin-grid">
-        <div className="admin-card">
+        <div className="admin-card admin-card--account">
           <div className="admin-card-header">
             <div>
               <h2>账号设置</h2>
@@ -581,7 +581,7 @@ function AdminView({
           </form>
         </div>
 
-        <div className="admin-card">
+        <div className="admin-card admin-card--uploads">
           <div className="admin-card-header">
             <div>
               <h2>近期上传图片</h2>
