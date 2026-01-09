@@ -208,9 +208,6 @@ function GenerateView({
   error,
   batchResult,
   loading,
-  latestVideo,
-  previewUrl,
-  previewPrompt,
   history,
   handleDownload,
   handleCopyPreviewPrompt,
@@ -433,53 +430,21 @@ function GenerateView({
               {historyLoading ? "刷新中..." : "刷新"}
             </button>
           </div>
-          <div className="preview-media">
-            {latestVideo ? (
-              <video controls src={previewUrl} className="preview-player" />
-            ) : (
-              <div className="preview-empty">
-                <p className="muted">暂无可预览的视频，生成完成后会出现在这里。</p>
-              </div>
-            )}
-          </div>
-          {isQueuedOrRunning ? (
-            <div className="progress-container">
-              <div
-                className="progress-bar-fill"
-                style={{ width: `${previewProgress ?? 0}%` }}
-              ></div>
-              <span className="progress-text">{Math.floor(previewProgress ?? 0)}%</span>
-            </div>
-          ) : statusLabel ? (
-            <p className="muted">{statusLabel}</p>
-          ) : null}
-          <div className="preview-actions">
-            <button
-              className="action-btn"
-              type="button"
-              onClick={() => handleDownload(previewUrl)}
-              disabled={!previewUrl}
-            >
-              下载视频
-            </button>
-            <button
-              className="action-btn"
-              type="button"
-              onClick={() => handleCopyPreviewPrompt(previewPrompt)}
-              disabled={!previewPrompt}
-            >
-              {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
-            </button>
-          </div>
           <div className="preview-list">
             {recentHistory.length > 0 ? (
               recentHistory.map((task) => {
                 const taskPreviewUrl = task.origin_video_url || task.video_url;
+                const isActiveTask = previewTask?.localTaskId === task.localTaskId;
                 return (
                   <div key={task.localTaskId} className="preview-item">
-                    <div className="preview-thumb">
+                    <div className="preview-card-player">
                       {taskPreviewUrl ? (
-                        <video src={taskPreviewUrl} muted playsInline />
+                        <video
+                          controls
+                          src={taskPreviewUrl}
+                          className="preview-player"
+                          playsInline
+                        />
                       ) : (
                         <div className="preview-thumb-empty">暂无预览</div>
                       )}
@@ -491,6 +456,37 @@ function GenerateView({
                         <span className={`status status-${task.status}`}>
                           {statusLabels[task.status] || task.status}
                         </span>
+                      </div>
+                      {isActiveTask && isQueuedOrRunning ? (
+                        <div className="progress-container">
+                          <div
+                            className="progress-bar-fill"
+                            style={{ width: `${previewProgress ?? 0}%` }}
+                          ></div>
+                          <span className="progress-text">
+                            {Math.floor(previewProgress ?? 0)}%
+                          </span>
+                        </div>
+                      ) : isActiveTask && statusLabel ? (
+                        <p className="muted">{statusLabel}</p>
+                      ) : null}
+                      <div className="preview-actions">
+                        <button
+                          className="action-btn"
+                          type="button"
+                          onClick={() => handleDownload(taskPreviewUrl)}
+                          disabled={!taskPreviewUrl}
+                        >
+                          下载视频
+                        </button>
+                        <button
+                          className="action-btn"
+                          type="button"
+                          onClick={() => handleCopyPreviewPrompt(task.prompt)}
+                          disabled={!task.prompt}
+                        >
+                          {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -2040,13 +2036,7 @@ export default function App() {
     }
   };
 
-  const latestVideo = useMemo(
-    () => history.find((task) => task.video_url || task.origin_video_url),
-    [history]
-  );
   const previewTask = useMemo(() => history[0] || null, [history]);
-  const previewUrl = latestVideo?.video_url || latestVideo?.origin_video_url;
-  const previewPrompt = latestVideo?.prompt;
 
   const latestImage = useMemo(
     () => imageHistory.find((task) => task.image_url),
@@ -2140,9 +2130,6 @@ export default function App() {
               error={error}
               batchResult={batchResult}
               loading={loading}
-              latestVideo={latestVideo}
-              previewUrl={previewUrl}
-              previewPrompt={previewPrompt}
               history={history}
               handleDownload={handleDownload}
               handleCopyPreviewPrompt={handleCopyPreviewPrompt}
