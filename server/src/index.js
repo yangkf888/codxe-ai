@@ -57,14 +57,43 @@ const getPublicBaseUrl = () => {
   return PUBLIC_BASE_URL.replace(/\/+$/, "");
 };
 
-const buildPublicVideoUrl = (localTaskId) => {
-  const base = getPublicBaseUrl();
+const buildPublicVideoUrl = (localTaskId, baseUrl = getPublicBaseUrl()) => {
+  const base = baseUrl || "";
   return `${base}${NORMALIZED_FILES_PATH}/${localTaskId}.mp4`;
 };
 
-const buildPublicUploadUrl = (filename) => {
-  const base = getPublicBaseUrl();
+const buildPublicUploadUrl = (filename, baseUrl = getPublicBaseUrl()) => {
+  const base = baseUrl || "";
   return `${base}${UPLOADS_PUBLIC_PATH}/${filename}`;
+};
+
+const getRequestBaseUrl = (req) => {
+  const configured = getPublicBaseUrl();
+  if (configured) {
+    return configured;
+  }
+  if (!req) {
+    return "";
+  }
+  const host = req.get("host");
+  if (!host) {
+    return "";
+  }
+  return `${req.protocol}://${host}`.replace(/\/+$/, "");
+};
+
+const ensureAbsoluteUrl = (value, baseUrl) => {
+  if (!value) {
+    return value;
+  }
+  if (!baseUrl) {
+    return value;
+  }
+  try {
+    return new URL(value, baseUrl).toString();
+  } catch (error) {
+    return value;
+  }
 };
 
 const parseTask = (raw) => {
@@ -265,12 +294,12 @@ class ApiError extends Error {
   }
 }
 
-const resolveImageUrls = (image_url, image_urls) => {
+const resolveImageUrls = (image_url, image_urls, baseUrl) => {
   if (Array.isArray(image_urls)) {
-    return image_urls.filter(Boolean);
+    return image_urls.filter(Boolean).map((url) => ensureAbsoluteUrl(url, baseUrl));
   }
   if (image_url) {
-    return [image_url];
+    return [ensureAbsoluteUrl(image_url, baseUrl)];
   }
   return [];
 };
@@ -300,7 +329,7 @@ const kieClient = {
   }
 };
 
-const createOne = async (job = {}) => {
+const createOne = async (job = {}, { baseUrl = "" } = {}) => {
   const {
     mode,
     prompt,
@@ -321,7 +350,7 @@ const createOne = async (job = {}) => {
     throw new ApiError(400, "Invalid mode");
   }
 
-  const resolvedImageUrls = resolveImageUrls(image_url, image_urls);
+  const resolvedImageUrls = resolveImageUrls(image_url, image_urls, baseUrl);
 
   if (mode === "i2v" && resolvedImageUrls.length === 0) {
     throw new ApiError(400, "image_url or image_urls is required for i2v");
@@ -386,8 +415,8 @@ const createOne = async (job = {}) => {
         params: {
           mode,
           prompt,
-          image_url,
-          image_urls,
+          image_url: resolvedImageUrls[0] || null,
+          image_urls: resolvedImageUrls,
           duration,
           aspect_ratio,
           remove_watermark,
@@ -436,7 +465,8 @@ app.post("/api/login", (req, res) => {
 
 app.post("/api/video/create", limiter, async (req, res) => {
   try {
-    const { tasks } = await createOne(req.body);
+    const baseUrl = getRequestBaseUrl(req);
+    const { tasks } = await createOne(req.body, { baseUrl });
     return res.json({
       task_ids: tasks.map((task) => task.localTaskId),
       tasks
@@ -456,12 +486,13 @@ app.post("/api/video/batch_create", limiter, async (req, res) => {
 
   const normalizedConcurrency = Math.min(Math.max(Number(concurrency) || 10, 1), 30);
   const limit = pLimit(normalizedConcurrency);
+  const baseUrl = getRequestBaseUrl(req);
 
   const results = await Promise.all(
     jobs.map((job, index) =>
       limit(async () => {
         try {
-          const { tasks } = await createOne(job);
+          const { tasks } = await createOne(job, { baseUrl });
           return {
             index,
             ok: true,
@@ -491,9 +522,10 @@ app.post("/api/upload", limiter, upload.single("file"), async (req, res) => {
     return res.status(400).json({ success: false, error: "file is required" });
   }
 
+  const baseUrl = getRequestBaseUrl(req);
   return res.json({
     success: true,
-    url: buildPublicUploadUrl(req.file.filename)
+    url: buildPublicUploadUrl(req.file.filename, baseUrl)
   });
 });
 
