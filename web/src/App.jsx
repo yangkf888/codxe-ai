@@ -890,8 +890,10 @@ export default function App() {
 
         const newTasks = successes.map((result) => {
           const job = jobs[result.index] || {};
+          const localTaskId =
+            result.task_id || result.task_ids?.[0] || result.tasks?.[0]?.localTaskId;
           return {
-            localTaskId: result.task_id,
+            localTaskId,
             createdAt: new Date().toISOString(),
             mode: job.mode || form.mode,
             prompt: job.prompt,
@@ -939,8 +941,9 @@ export default function App() {
         }
 
         const data = await response.json();
+        const localTaskId = data.task_id || data.task_ids?.[0] || data.tasks?.[0]?.localTaskId;
         const newTask = {
-          localTaskId: data.task_id,
+          localTaskId,
           createdAt: new Date().toISOString(),
           mode: form.mode,
           prompt: form.prompt,
