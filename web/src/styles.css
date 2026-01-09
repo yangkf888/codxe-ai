@@ -120,7 +120,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  overflow-y: auto;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
   flex: 1;
   min-height: 0;
 }
@@ -192,7 +193,7 @@ button {
   display: grid;
   grid-template-columns: 450px 1fr;
   gap: 80px;
-  align-items: start;
+  align-items: stretch;
   max-width: 100%;
   height: calc(100vh - 160px);
   overflow: hidden;
@@ -218,6 +219,7 @@ button {
 .generate-right {
   overflow: hidden;
   padding-right: 12px;
+  height: 100%;
 }
 
 .panel-header h1 {
@@ -617,7 +619,8 @@ select {
   gap: 16px;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
   max-height: 100%;
   padding-right: 4px;
 }
