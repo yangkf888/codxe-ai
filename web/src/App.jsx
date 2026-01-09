@@ -418,7 +418,7 @@ function GenerateView({
               <h2>视频预览</h2>
               <p className="muted">展示最近生成的视频结果。</p>
               <p className="muted preview-note">
-                本页面仅显示最近 10 次记录，更多记录请到历史记录中查看。
+                本页面仅显示最近 10 次记录，更多记录请到视频创作记录中查看。
               </p>
             </div>
             <button
@@ -495,7 +495,7 @@ function GenerateView({
                 })
               ) : (
                 <div className="preview-empty">
-                  <p className="muted">暂无生成记录，先提交任务试试吧。</p>
+                  <p className="muted">暂无创作记录，先提交任务试试吧。</p>
                 </div>
               )}
             </div>
@@ -541,7 +541,7 @@ function ImageGenerateView({
     <section className="generate-view">
       <div className="generate-left">
         <div className="panel-header">
-          <h1>图片生成</h1>
+          <h1>图片创作</h1>
         </div>
         <form className="form form-section" onSubmit={handleSubmit}>
           <div className="field">
@@ -728,7 +728,7 @@ function ImageGenerateView({
               <h2>图片预览</h2>
               <p className="muted">展示最近生成的图片结果。</p>
               <p className="muted preview-note">
-                本页面仅显示最近 10 次记录，更多记录请到图片历史中查看。
+                本页面仅显示最近 10 次记录，更多记录请到图片创作记录中查看。
               </p>
             </div>
             <button
@@ -792,7 +792,7 @@ function ImageGenerateView({
                 ))
               ) : (
                 <div className="preview-empty">
-                  <p className="muted">暂无生成记录，先提交任务试试吧。</p>
+                  <p className="muted">暂无创作记录，先提交任务试试吧。</p>
                 </div>
               )}
             </div>
@@ -818,7 +818,7 @@ function HistoryView({
     <section className="history-view">
       <div className="history-header">
         <div>
-          <h2>历史记录</h2>
+          <h2>视频创作记录</h2>
         </div>
         <button
           className="ghost"
@@ -831,7 +831,7 @@ function HistoryView({
       </div>
 
       {history.length === 0 ? (
-        <p className="muted">暂无生成记录，先提交任务试试吧。</p>
+        <p className="muted">暂无创作记录，先提交任务试试吧。</p>
       ) : (
         <div className="history-table">
           <div className="history-table-header">
@@ -921,7 +921,7 @@ function ImageHistoryView({
     <section className="history-view">
       <div className="history-header">
         <div>
-          <h2>图片历史</h2>
+          <h2>图片创作记录</h2>
         </div>
         <button
           className="ghost"
@@ -934,7 +934,7 @@ function ImageHistoryView({
       </div>
 
       {history.length === 0 ? (
-        <p className="muted">暂无生成记录，先提交任务试试吧。</p>
+        <p className="muted">暂无创作记录，先提交任务试试吧。</p>
       ) : (
         <div className="history-table">
           <div className="history-table-header">
@@ -1212,7 +1212,7 @@ export default function App() {
         });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || "加载历史记录失败");
+          throw new Error(data.error || "加载视频创作记录失败");
         }
         const data = await response.json();
         setHistory(data.tasks || []);
@@ -1246,7 +1246,7 @@ export default function App() {
         });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || "加载图片历史失败");
+          throw new Error(data.error || "加载图片创作记录失败");
         }
         const data = await response.json();
         setImageHistory(data.tasks || []);
@@ -1987,7 +1987,7 @@ export default function App() {
       };
 
       setImageHistory((prev) => [newTask, ...prev]);
-      setImageNotice("已执行，请到图片历史中查看详情。");
+      setImageNotice("已执行，请到图片创作记录中查看详情。");
     } catch (err) {
       setImageError(err.message);
     } finally {
@@ -2064,7 +2064,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="logo-block">
           <div className="logo">YKF-AI</div>
-          <p className="logo-subtitle">AI 视频生成平台</p>
+          <p className="logo-subtitle">AI 创作中心</p>
         </div>
         <nav className="nav">
           <button
@@ -2072,28 +2072,28 @@ export default function App() {
             className={`nav-item ${activeTab === "generate" ? "is-active" : ""}`}
             onClick={() => setActiveTab("generate")}
           >
-            视频生成
+            视频创作
           </button>
           <button
             type="button"
             className={`nav-item ${activeTab === "image" ? "is-active" : ""}`}
             onClick={() => setActiveTab("image")}
           >
-            图片生成
+            图片创作
           </button>
           <button
             type="button"
             className={`nav-item ${activeTab === "history" ? "is-active" : ""}`}
             onClick={() => setActiveTab("history")}
           >
-            历史记录
+            视频创作记录
           </button>
           <button
             type="button"
             className={`nav-item ${activeTab === "image-history" ? "is-active" : ""}`}
             onClick={() => setActiveTab("image-history")}
           >
-            图片历史
+            图片创作记录
           </button>
           <button
             type="button"
@@ -2110,7 +2110,7 @@ export default function App() {
 
       <div className="main-content-wrapper">
         <header className="app-header">
-          <span>YKF-AI 视频生成平台</span>
+          <span>YKF-AI 创作中心</span>
           <button className="ghost logout-button" type="button" onClick={handleLogout}>
             退出登录
           </button>
