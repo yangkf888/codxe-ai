@@ -480,6 +480,7 @@ function ImageGenerateView({
   uploadState,
   loading,
   error,
+  notice,
   latestImage,
   previewUrl,
   previewPrompt,
@@ -610,99 +611,72 @@ function ImageGenerateView({
                 <>
                   <div className="field">
                     <label>画面比例</label>
-                    <div className="segmented-control" role="group" aria-label="画面比例">
+                    <select
+                      name="aspect_ratio"
+                      value={form.aspect_ratio}
+                      onChange={handleChange}
+                      className="button-select"
+                    >
                       {imageAspectRatios.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`segment ${
-                            form.aspect_ratio === option.value ? "is-active" : ""
-                          }`}
-                          onClick={() =>
-                            handleChange({
-                              target: { name: "aspect_ratio", value: option.value }
-                            })
-                          }
-                          aria-pressed={form.aspect_ratio === option.value}
-                        >
+                        <option key={option.value} value={option.value}>
                           {option.label}
-                        </button>
+                        </option>
                       ))}
-                    </div>
+                    </select>
                   </div>
                   <div className="field">
                     <label>分辨率</label>
-                    <div className="segmented-control" role="group" aria-label="分辨率">
+                    <select
+                      name="resolution"
+                      value={form.resolution}
+                      onChange={handleChange}
+                      className="button-select"
+                    >
                       {imageResolutions.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`segment ${
-                            form.resolution === option.value ? "is-active" : ""
-                          }`}
-                          onClick={() =>
-                            handleChange({
-                              target: { name: "resolution", value: option.value }
-                            })
-                          }
-                          aria-pressed={form.resolution === option.value}
-                        >
+                        <option key={option.value} value={option.value}>
                           {option.label}
-                        </button>
+                        </option>
                       ))}
-                    </div>
+                    </select>
                   </div>
                 </>
               ) : (
                 <div className="field">
                   <label>画面比例</label>
-                  <div className="segmented-control" role="group" aria-label="画面比例">
+                  <select
+                    name="image_size"
+                    value={form.image_size}
+                    onChange={handleChange}
+                    className="button-select"
+                  >
                     {imageSizeOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`segment ${
-                          form.image_size === option.value ? "is-active" : ""
-                        }`}
-                        onClick={() =>
-                          handleChange({
-                            target: { name: "image_size", value: option.value }
-                          })
-                        }
-                        aria-pressed={form.image_size === option.value}
-                      >
+                      <option key={option.value} value={option.value}>
                         {option.label}
-                      </button>
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
               )}
               <div className="field">
                 <label>输出格式</label>
-                <div className="segmented-control" role="group" aria-label="输出格式">
+                <select
+                  name="output_format"
+                  value={form.output_format}
+                  onChange={handleChange}
+                  className="button-select"
+                >
                   {outputFormats.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`segment ${
-                        form.output_format === option.value ? "is-active" : ""
-                      }`}
-                      onClick={() =>
-                        handleChange({
-                          target: { name: "output_format", value: option.value }
-                        })
-                      }
-                      aria-pressed={form.output_format === option.value}
-                    >
+                    <option key={option.value} value={option.value}>
                       {option.label}
-                    </button>
+                    </option>
                   ))}
-                </div>
+                </select>
               </div>
             </div>
           </div>
 
           {error && <p className="error">{error}</p>}
+          {notice && !error && <p className="notice-success">{notice}</p>}
 
           <button className="primary" type="submit" disabled={loading}>
             {loading ? "生成中..." : "立即生成"}
@@ -1100,6 +1074,7 @@ export default function App() {
   const [imageHistoryLoading, setImageHistoryLoading] = useState(false);
   const [error, setError] = useState("");
   const [imageError, setImageError] = useState("");
+  const [imageNotice, setImageNotice] = useState("");
   const [imageUploadState, setImageUploadState] = useState({
     status: "idle",
     message: "",
@@ -1460,9 +1435,11 @@ export default function App() {
         image_input: []
       }));
       setImageUploadState({ status: "idle", message: "", fileName: "" });
+      setImageNotice("");
       return;
     }
     setImageForm((prev) => ({ ...prev, [name]: value }));
+    setImageNotice("");
   };
 
   const handleCopy = async (value, onSuccess, setErrorState = setError) => {
@@ -1877,6 +1854,7 @@ export default function App() {
   const handleImageSubmit = async (event) => {
     event.preventDefault();
     setImageError("");
+    setImageNotice("");
 
     if (!imageForm.prompt.trim()) {
       setImageError("请输入提示词。");
@@ -1936,6 +1914,7 @@ export default function App() {
       };
 
       setImageHistory((prev) => [newTask, ...prev]);
+      setImageNotice("已执行，请到图片历史中查看详情。");
     } catch (err) {
       setImageError(err.message);
     } finally {
@@ -2114,6 +2093,7 @@ export default function App() {
               uploadState={imageUploadState}
               loading={imageLoading}
               error={imageError}
+              notice={imageNotice}
               latestImage={latestImage}
               previewUrl={previewImageUrl}
               previewPrompt={previewImagePrompt}
