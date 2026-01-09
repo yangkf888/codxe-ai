@@ -126,7 +126,10 @@ function GenerateView({
   token,
   fetchHistory,
   previewTask,
-  simulatedProgress
+  simulatedProgress,
+  imagePreviewUrl,
+  setImagePreviewUrl,
+  localImagePreviewUrl
 }) {
   const isQueuedOrRunning =
     previewTask && (previewTask.status === "queued" || previewTask.status === "running");
@@ -1036,6 +1039,9 @@ export default function App() {
               fetchHistory={fetchHistory}
               previewTask={previewTask}
               simulatedProgress={simulatedProgress}
+              imagePreviewUrl={imagePreviewUrl}
+              setImagePreviewUrl={setImagePreviewUrl}
+              localImagePreviewUrl={localImagePreviewUrl}
             />
           ) : (
             <HistoryView
