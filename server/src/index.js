@@ -50,11 +50,33 @@ const taskKey = (localTaskId) => `aiVideo:task:${localTaskId}`;
 const mapKey = (kieTaskId) => `aiVideo:map:${kieTaskId}`;
 const recentKey = "aiVideo:recent";
 
+const normalizeBaseUrl = (value) => {
+  if (!value) {
+    return "";
+  }
+  const cleaned = String(value).trim().replace(/\uFFFD/g, "");
+  if (!cleaned) {
+    return "";
+  }
+  let normalized = cleaned;
+  if (normalized.startsWith("//")) {
+    normalized = `https:${normalized}`;
+  } else if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(normalized)) {
+    normalized = `https://${normalized}`;
+  }
+  try {
+    const url = new URL(normalized);
+    return url.toString().replace(/\/+$/, "");
+  } catch (error) {
+    return normalized.replace(/\/+$/, "");
+  }
+};
+
 const getPublicBaseUrl = () => {
   if (!process.env.PUBLIC_BASE_URL || PUBLIC_BASE_URL === DEFAULT_PUBLIC_BASE_URL) {
     return "";
   }
-  return PUBLIC_BASE_URL.replace(/\/+$/, "");
+  return normalizeBaseUrl(PUBLIC_BASE_URL);
 };
 
 const buildPublicVideoUrl = (localTaskId, baseUrl = getPublicBaseUrl()) => {
@@ -76,26 +98,41 @@ const getRequestBaseUrl = (req) => {
     return "";
   }
   const forwardedHost = req.get("x-forwarded-host");
-  const host = forwardedHost || req.get("host");
+  const rawHost = forwardedHost || req.get("host");
+  const host = rawHost ? rawHost.split(",")[0].trim().replace(/\uFFFD/g, "") : "";
   if (!host) {
     return "";
   }
   const forwardedProto = req.get("x-forwarded-proto");
   const protocol = forwardedProto ? forwardedProto.split(",")[0].trim() : req.protocol;
-  return `${protocol}://${host}`.replace(/\/+$/, "");
+  return normalizeBaseUrl(`${protocol}://${host}`);
 };
 
 const ensureAbsoluteUrl = (value, baseUrl) => {
   if (!value) {
     return value;
   }
-  if (!baseUrl) {
-    return value;
+  const cleaned = String(value).trim().replace(/\uFFFD/g, "");
+  if (!cleaned) {
+    return cleaned;
+  }
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(cleaned)) {
+    return cleaned;
+  }
+  if (cleaned.startsWith("//")) {
+    return normalizeBaseUrl(cleaned);
+  }
+  if (!cleaned.startsWith("/") && cleaned.includes(".")) {
+    return normalizeBaseUrl(cleaned);
+  }
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  if (!normalizedBaseUrl) {
+    return cleaned;
   }
   try {
-    return new URL(value, baseUrl).toString();
+    return new URL(cleaned, normalizedBaseUrl).toString();
   } catch (error) {
-    return value;
+    return cleaned;
   }
 };
 
