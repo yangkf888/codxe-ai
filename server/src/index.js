@@ -49,6 +49,9 @@ redisClient.on("error", (error) => {
 const taskKey = (localTaskId) => `aiVideo:task:${localTaskId}`;
 const mapKey = (kieTaskId) => `aiVideo:map:${kieTaskId}`;
 const recentKey = "aiVideo:recent";
+const imageTaskKey = (localTaskId) => `aiImage:task:${localTaskId}`;
+const imageMapKey = (kieTaskId) => `aiImage:map:${kieTaskId}`;
+const imageRecentKey = "aiImage:recent";
 const adminKey = "aiVideo:admin";
 let adminUsername = ADMIN_USERNAME;
 let adminPassword = ADMIN_PASSWORD;
@@ -156,6 +159,11 @@ const getTask = async (localTaskId) => {
   return parseTask(raw);
 };
 
+const getImageTask = async (localTaskId) => {
+  const raw = await redisClient.get(imageTaskKey(localTaskId));
+  return parseTask(raw);
+};
+
 const loadAdminCredentials = async () => {
   const raw = await redisClient.get(adminKey);
   if (!raw) {
@@ -197,6 +205,20 @@ const saveTask = async (task, { refreshRecent = false } = {}) => {
     const score = Number(new Date(task.createdAt)) || Date.now();
     multi.zAdd(recentKey, [{ score, value: task.localTaskId }]);
     multi.expire(recentKey, TASK_TTL_SECONDS);
+  }
+  await multi.exec();
+};
+
+const saveImageTask = async (task, { refreshRecent = false } = {}) => {
+  const multi = redisClient.multi();
+  multi.set(imageTaskKey(task.localTaskId), JSON.stringify(task), { EX: TASK_TTL_SECONDS });
+  if (task.kieTaskId) {
+    multi.set(imageMapKey(task.kieTaskId), task.localTaskId, { EX: TASK_TTL_SECONDS });
+  }
+  if (refreshRecent) {
+    const score = Number(new Date(task.createdAt)) || Date.now();
+    multi.zAdd(imageRecentKey, [{ score, value: task.localTaskId }]);
+    multi.expire(imageRecentKey, TASK_TTL_SECONDS);
   }
   await multi.exec();
 };
@@ -298,6 +320,10 @@ const parseResultVideoUrl = (rawResultJson) => {
   return null;
 };
 
+const parseResultImageUrl = (rawResultJson) => {
+  return parseResultVideoUrl(rawResultJson);
+};
+
 const normalizeTaskStatus = (status) => {
   if (!status) {
     return status;
@@ -334,6 +360,10 @@ const aspectRatioMap = {
   portrait: "portrait",
   square: "square"
 };
+
+const imageAspectRatios = new Set(["1:1", "16:9", "9:16", "4:3", "3:4"]);
+const imageResolutions = new Set(["1K", "2K", "4K"]);
+const imageOutputFormats = new Set(["png", "PNG", "jpg", "JPG"]);
 
 const frameMap = {
   5: "10",
@@ -509,6 +539,66 @@ const createOne = async (job = {}, { baseUrl = "" } = {}) => {
   return { tasks };
 };
 
+const createImageTask = async (payload = {}, { baseUrl = "" } = {}) => {
+  const { prompt, aspect_ratio = "1:1", resolution = "1K", output_format = "png" } = payload;
+
+  if (!prompt || !String(prompt).trim()) {
+    throw new ApiError(400, "Missing prompt");
+  }
+
+  if (!imageAspectRatios.has(aspect_ratio)) {
+    throw new ApiError(400, "Invalid aspect_ratio");
+  }
+
+  if (!imageResolutions.has(resolution)) {
+    throw new ApiError(400, "Invalid resolution");
+  }
+
+  if (!imageOutputFormats.has(output_format)) {
+    throw new ApiError(400, "Invalid output_format");
+  }
+
+  const model = process.env.KIE_IMAGE_MODEL || "nano-banana-pro";
+  const callbackBaseUrl = baseUrl || getPublicBaseUrl();
+  const taskPayload = {
+    model,
+    callBackUrl: callbackBaseUrl ? `${callbackBaseUrl}/api/callback` : "",
+    input: {
+      prompt: String(prompt).trim(),
+      aspect_ratio,
+      resolution,
+      output_format
+    }
+  };
+
+  const kieTaskId = await kieClient.createTask(taskPayload);
+  const localTaskId = `image_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const createdAt = new Date().toISOString();
+  const task = {
+    localTaskId,
+    createdAt,
+    prompt: String(prompt).trim(),
+    status: "queued",
+    progress: 0,
+    image_url: null,
+    origin_image_url: null,
+    error: null,
+    kieTaskId,
+    params: {
+      prompt: String(prompt).trim(),
+      aspect_ratio,
+      resolution,
+      output_format,
+      model
+    }
+  };
+
+  await saveImageTask(task, { refreshRecent: true });
+  console.log(`Created image task localTaskId=${localTaskId} kieTaskId=${kieTaskId}`);
+
+  return { task };
+};
+
 app.use((req, res, next) => {
   if (!req.path.startsWith("/api")) {
     return next();
@@ -572,6 +662,20 @@ app.post("/api/video/create", limiter, async (req, res) => {
   } catch (error) {
     const statusCode = error.statusCode || 500;
     return res.status(statusCode).json({ error: error.message || "Failed to create video task" });
+  }
+});
+
+app.post("/api/image/create", limiter, async (req, res) => {
+  try {
+    const baseUrl = getRequestBaseUrl(req);
+    const { task } = await createImageTask(req.body, { baseUrl });
+    return res.json({
+      task_id: task.localTaskId,
+      task
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({ error: error.message || "Failed to create image task" });
   }
 });
 
@@ -647,6 +751,26 @@ app.get("/api/video/status", async (req, res) => {
   });
 });
 
+app.get("/api/image/status", async (req, res) => {
+  const { task_id } = req.query;
+
+  if (!task_id) {
+    return res.status(400).json({ error: "task_id is required" });
+  }
+
+  const task = await getImageTask(task_id);
+  if (!task) {
+    return res.status(404).json({ error: "Task not found" });
+  }
+
+  return res.json({
+    status: task.status,
+    progress: task.progress,
+    image_url: task.image_url,
+    error: task.error
+  });
+});
+
 app.get("/api/video/list", async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
   const ids = await redisClient.zRange(recentKey, 0, limit - 1, { REV: true });
@@ -682,6 +806,44 @@ app.get("/api/video/list", async (req, res) => {
 
   if (missingIds.length > 0) {
     await redisClient.zRem(recentKey, missingIds);
+  }
+
+  return res.json({ tasks });
+});
+
+app.get("/api/image/list", async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const ids = await redisClient.zRange(imageRecentKey, 0, limit - 1, { REV: true });
+  if (ids.length === 0) {
+    return res.json({ tasks: [] });
+  }
+  const rawTasks = await redisClient.mGet(ids.map((id) => imageTaskKey(id)));
+  const tasks = [];
+  const missingIds = [];
+
+  rawTasks.forEach((raw, index) => {
+    if (!raw) {
+      missingIds.push(ids[index]);
+      return;
+    }
+    const task = parseTask(raw);
+    if (!task) {
+      missingIds.push(ids[index]);
+      return;
+    }
+    tasks.push({
+      localTaskId: task.localTaskId,
+      createdAt: task.createdAt,
+      prompt: task.prompt,
+      status: task.status,
+      progress: task.progress,
+      image_url: task.image_url || task.origin_image_url || null,
+      error: task.error || null
+    });
+  });
+
+  if (missingIds.length > 0) {
+    await redisClient.zRem(imageRecentKey, missingIds);
   }
 
   return res.json({ tasks });
@@ -743,6 +905,28 @@ app.delete("/api/tasks/:id", async (req, res) => {
   return res.json({ success: true, id: localTaskId });
 });
 
+app.delete("/api/image/tasks/:id", async (req, res) => {
+  const localTaskId = req.params.id;
+  if (!localTaskId) {
+    return res.status(400).json({ error: "Task id is required" });
+  }
+
+  const task = await getImageTask(localTaskId);
+  if (!task) {
+    return res.status(404).json({ error: "Task not found" });
+  }
+
+  const multi = redisClient.multi();
+  multi.del(imageTaskKey(localTaskId));
+  multi.zRem(imageRecentKey, localTaskId);
+  if (task.kieTaskId) {
+    multi.del(imageMapKey(task.kieTaskId));
+  }
+
+  await multi.exec();
+  return res.json({ success: true, id: localTaskId });
+});
+
 app.post("/api/callback", async (req, res) => {
   const kieTaskId = req.body?.data?.taskId;
   const state = normalizeTaskStatus(req.body?.data?.state);
@@ -752,9 +936,51 @@ app.post("/api/callback", async (req, res) => {
     return res.status(400).json({ error: "Missing taskId" });
   }
 
-  const localTaskId = await redisClient.get(mapKey(kieTaskId));
+  const imageLocalTaskId = await redisClient.get(imageMapKey(kieTaskId));
+  const localTaskId = imageLocalTaskId || (await redisClient.get(mapKey(kieTaskId)));
   if (!localTaskId) {
     console.warn(`Callback task not found for kieTaskId=${kieTaskId}`);
+    return res.json({ ok: true });
+  }
+
+  if (imageLocalTaskId) {
+    const task = await getImageTask(localTaskId);
+    if (!task) {
+      console.warn(`Callback local image task missing for kieTaskId=${kieTaskId}`);
+      return res.json({ ok: true });
+    }
+
+    console.log(`Callback received image kieTaskId=${kieTaskId} state=${state}`);
+    if (state) {
+      task.status = state;
+    }
+    const normalizedProgress = Number(progress);
+    if (!Number.isNaN(normalizedProgress)) {
+      task.progress = normalizedProgress;
+    }
+
+    if (state === "success") {
+      task.progress = 100;
+      const originUrl = parseResultImageUrl(req.body?.data?.resultJson);
+      if (originUrl) {
+        task.origin_image_url = originUrl;
+        task.image_url = originUrl;
+      } else {
+        task.error = task.error || "Missing origin image url in callback";
+      }
+      await saveImageTask(task);
+      return res.json({ ok: true });
+    }
+
+    if (state === "fail") {
+      task.error =
+        req.body?.data?.failMsg ||
+        req.body?.data?.msg ||
+        req.body?.data?.failCode ||
+        "Kie task failed";
+    }
+
+    await saveImageTask(task);
     return res.json({ ok: true });
   }
 

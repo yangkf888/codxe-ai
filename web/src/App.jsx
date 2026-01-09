@@ -9,6 +9,13 @@ const initialForm = {
   aspect_ratio: "9:16"
 };
 
+const initialImageForm = {
+  prompt: "",
+  aspect_ratio: "1:1",
+  resolution: "1K",
+  output_format: "png"
+};
+
 const statusLabels = {
   queued: "排队中",
   running: "生成中",
@@ -29,6 +36,25 @@ const durations = [
 const aspectRatios = [
   { value: "9:16", label: "竖屏 (9:16)" },
   { value: "16:9", label: "横屏 (16:9)" }
+];
+
+const imageAspectRatios = [
+  { value: "1:1", label: "正方形 (1:1)" },
+  { value: "4:3", label: "横向 (4:3)" },
+  { value: "3:4", label: "竖向 (3:4)" },
+  { value: "16:9", label: "宽屏 (16:9)" },
+  { value: "9:16", label: "竖屏 (9:16)" }
+];
+
+const imageResolutions = [
+  { value: "1K", label: "1K" },
+  { value: "2K", label: "2K" },
+  { value: "4K", label: "4K" }
+];
+
+const imageFormats = [
+  { value: "png", label: "PNG" },
+  { value: "jpg", label: "JPG" }
 ];
 
 const formatProgress = (value) => {
@@ -397,6 +423,167 @@ function GenerateView({
   );
 }
 
+function ImageGenerateView({
+  form,
+  handleSubmit,
+  handleChange,
+  loading,
+  error,
+  latestImage,
+  previewUrl,
+  previewPrompt,
+  handleDownload,
+  handleCopyPreviewPrompt,
+  copiedPreviewPrompt,
+  historyLoading,
+  token,
+  fetchHistory
+}) {
+  return (
+    <section className="generate-view">
+      <div className="generate-left">
+        <div className="panel-header">
+          <h1>图片生成</h1>
+        </div>
+        <form className="form form-section" onSubmit={handleSubmit}>
+          <div className="field">
+            <label htmlFor="image_prompt">提示词</label>
+            <textarea
+              id="image_prompt"
+              name="prompt"
+              rows="4"
+              placeholder="描述你想生成的图片内容，例如：夕阳下的城市剪影"
+              value={form.prompt}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div className="field">
+            <label>图片参数</label>
+            <div className="grid">
+              <div className="field">
+                <label>画面比例</label>
+                <div className="segmented-control" role="group" aria-label="画面比例">
+                  {imageAspectRatios.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`segment ${
+                        form.aspect_ratio === option.value ? "is-active" : ""
+                      }`}
+                      onClick={() =>
+                        handleChange({
+                          target: { name: "aspect_ratio", value: option.value }
+                        })
+                      }
+                      aria-pressed={form.aspect_ratio === option.value}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="field">
+                <label>分辨率</label>
+                <div className="segmented-control" role="group" aria-label="分辨率">
+                  {imageResolutions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`segment ${
+                        form.resolution === option.value ? "is-active" : ""
+                      }`}
+                      onClick={() =>
+                        handleChange({
+                          target: { name: "resolution", value: option.value }
+                        })
+                      }
+                      aria-pressed={form.resolution === option.value}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="field">
+                <label>输出格式</label>
+                <div className="segmented-control" role="group" aria-label="输出格式">
+                  {imageFormats.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`segment ${
+                        form.output_format === option.value ? "is-active" : ""
+                      }`}
+                      onClick={() =>
+                        handleChange({
+                          target: { name: "output_format", value: option.value }
+                        })
+                      }
+                      aria-pressed={form.output_format === option.value}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {error && <p className="error">{error}</p>}
+
+          <button className="primary" type="submit" disabled={loading}>
+            {loading ? "生成中..." : "立即生成"}
+          </button>
+        </form>
+      </div>
+      <div className="generate-right">
+        <div className="preview-section">
+          <div className="preview-header">
+            <div>
+              <h2>图片预览</h2>
+              <p className="muted">展示最近生成的图片结果。</p>
+            </div>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => fetchHistory()}
+              disabled={historyLoading || !token}
+            >
+              {historyLoading ? "刷新中..." : "刷新"}
+            </button>
+          </div>
+          {latestImage ? (
+            <img src={previewUrl} alt="生成预览" className="preview-image" />
+          ) : (
+            <div className="preview-empty">
+              <p className="muted">暂无可预览的图片，生成完成后会出现在这里。</p>
+            </div>
+          )}
+          <div className="preview-actions">
+            <button
+              className="action-btn"
+              type="button"
+              onClick={() => handleDownload(previewUrl)}
+              disabled={!previewUrl}
+            >
+              下载图片
+            </button>
+            <button
+              className="action-btn"
+              type="button"
+              onClick={() => handleCopyPreviewPrompt(previewPrompt)}
+              disabled={!previewPrompt}
+            >
+              {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function HistoryView({
   history,
   historyLoading,
@@ -495,6 +682,98 @@ function HistoryView({
               </div>
             );
           })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ImageHistoryView({
+  history,
+  historyLoading,
+  token,
+  fetchHistory,
+  handleDownload,
+  handleCopyPrompt,
+  copiedPromptId,
+  handleDeleteTask
+}) {
+  return (
+    <section className="history-view">
+      <div className="history-header">
+        <div>
+          <h2>图片历史</h2>
+        </div>
+        <button
+          className="ghost"
+          type="button"
+          onClick={() => fetchHistory()}
+          disabled={historyLoading || !token}
+        >
+          {historyLoading ? "刷新中..." : "刷新"}
+        </button>
+      </div>
+
+      {history.length === 0 ? (
+        <p className="muted">暂无生成记录，先提交任务试试吧。</p>
+      ) : (
+        <div className="history-table">
+          <div className="history-table-header">
+            <div>缩略图</div>
+            <div>提示词</div>
+            <div>状态</div>
+            <div>操作</div>
+          </div>
+          {history.map((task) => (
+            <div key={task.localTaskId} className="history-row">
+              <div className="history-thumb">
+                {task.image_url ? (
+                  <img src={task.image_url} alt={task.localTaskId} loading="lazy" />
+                ) : (
+                  <div className="history-thumb-empty">暂无预览</div>
+                )}
+              </div>
+              <div className="history-prompt">
+                <div className="task-id">{task.localTaskId}</div>
+                <p className="prompt">{formatPrompt(task.prompt)}</p>
+                <div className="task-meta-line">
+                  <span>{formatTimestamp(task.createdAt)}</span>
+                  <span className="chip">image</span>
+                </div>
+                <SimulatedProgressRow status={task.status} />
+                {task.error && <span className="error">{task.error}</span>}
+              </div>
+              <div className={`status status-${task.status}`}>
+                {statusLabels[task.status] || task.status}
+              </div>
+              <div className="history-actions">
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => handleDownload(task.image_url)}
+                  disabled={!task.image_url}
+                >
+                  下载图片
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => handleCopyPrompt(task)}
+                  disabled={!task.prompt}
+                >
+                  {copiedPromptId === task.localTaskId ? "✅ 已复制" : "复制提示词"}
+                </button>
+                <button
+                  className="btn-delete"
+                  type="button"
+                  onClick={() => handleDeleteTask(task.localTaskId)}
+                  disabled={!token}
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </section>
@@ -632,20 +911,27 @@ function AdminView({
 
 export default function App() {
   const [form, setForm] = useState(initialForm);
+  const [imageForm, setImageForm] = useState(initialImageForm);
   const [simulatedProgress, setSimulatedProgress] = useState(0);
   const [batchMode, setBatchMode] = useState(false);
   const [batchCount, setBatchCount] = useState(1);
   const [batchResult, setBatchResult] = useState(null);
   const [token, setToken] = useState(() => localStorage.getItem("app_token") || "");
   const [history, setHistory] = useState([]);
+  const [imageHistory, setImageHistory] = useState([]);
   const [currentTask, setCurrentTask] = useState(null);
   const [activeTab, setActiveTab] = useState("generate");
   const [previewVideo, setPreviewVideo] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [imageHistoryLoading, setImageHistoryLoading] = useState(false);
   const [error, setError] = useState("");
+  const [imageError, setImageError] = useState("");
   const [copiedPromptId, setCopiedPromptId] = useState(null);
   const [copiedPreviewPrompt, setCopiedPreviewPrompt] = useState(false);
+  const [copiedImagePromptId, setCopiedImagePromptId] = useState(null);
+  const [copiedImagePreviewPrompt, setCopiedImagePreviewPrompt] = useState(false);
   const [uploadState, setUploadState] = useState({
     status: "idle",
     message: "",
@@ -670,10 +956,17 @@ export default function App() {
   const imageUploadRef = useRef(null);
   const copiedPromptTimeoutRef = useRef(null);
   const copiedPreviewTimeoutRef = useRef(null);
+  const copiedImagePromptTimeoutRef = useRef(null);
+  const copiedImagePreviewTimeoutRef = useRef(null);
 
   const shouldPoll = useMemo(
     () => history.some((task) => !terminalStatuses.has(task.status)),
     [history]
+  );
+
+  const shouldPollImages = useMemo(
+    () => imageHistory.some((task) => !terminalStatuses.has(task.status)),
+    [imageHistory]
   );
 
   const fetchHistory = useCallback(
@@ -704,6 +997,40 @@ export default function App() {
       } finally {
         if (!silent) {
           setHistoryLoading(false);
+        }
+      }
+    },
+    [token]
+  );
+
+  const fetchImageHistory = useCallback(
+    async (silent = false) => {
+      if (!token) {
+        if (!silent) {
+          setImageHistoryLoading(false);
+        }
+        return;
+      }
+      if (!silent) {
+        setImageHistoryLoading(true);
+      }
+      try {
+        const response = await fetch("/api/image/list?limit=50", {
+          headers: { "X-APP-TOKEN": token }
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "加载图片历史失败");
+        }
+        const data = await response.json();
+        setImageHistory(data.tasks || []);
+      } catch (err) {
+        if (!silent) {
+          setImageError(err.message);
+        }
+      } finally {
+        if (!silent) {
+          setImageHistoryLoading(false);
         }
       }
     },
@@ -765,6 +1092,10 @@ export default function App() {
   }, [fetchHistory]);
 
   useEffect(() => {
+    fetchImageHistory();
+  }, [fetchImageHistory]);
+
+  useEffect(() => {
     fetchAdminAccount();
   }, [fetchAdminAccount]);
 
@@ -813,6 +1144,12 @@ export default function App() {
       if (copiedPreviewTimeoutRef.current) {
         clearTimeout(copiedPreviewTimeoutRef.current);
       }
+      if (copiedImagePromptTimeoutRef.current) {
+        clearTimeout(copiedImagePromptTimeoutRef.current);
+      }
+      if (copiedImagePreviewTimeoutRef.current) {
+        clearTimeout(copiedImagePreviewTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -835,6 +1172,18 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [fetchHistory, shouldPoll]);
+
+  useEffect(() => {
+    if (!shouldPollImages) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      fetchImageHistory(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [fetchImageHistory, shouldPollImages]);
 
   const pollTaskStatus = useCallback(
     async (taskId) => {
@@ -919,7 +1268,12 @@ export default function App() {
     }
   };
 
-  const handleCopy = async (value, onSuccess) => {
+  const handleImageChange = (event) => {
+    const { name, value } = event.target;
+    setImageForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCopy = async (value, onSuccess, setErrorState = setError) => {
     if (!value) {
       return false;
     }
@@ -928,7 +1282,7 @@ export default function App() {
       onSuccess?.();
       return true;
     } catch (err) {
-      setError(err.message || "复制失败");
+      setErrorState(err.message || "复制失败");
       return false;
     }
   };
@@ -963,6 +1317,44 @@ export default function App() {
     });
   };
 
+  const handleCopyImagePrompt = async (task) => {
+    if (!task?.prompt) {
+      return;
+    }
+    await handleCopy(
+      task.prompt,
+      () => {
+        setCopiedImagePromptId(task.localTaskId);
+        if (copiedImagePromptTimeoutRef.current) {
+          clearTimeout(copiedImagePromptTimeoutRef.current);
+        }
+        copiedImagePromptTimeoutRef.current = setTimeout(() => {
+          setCopiedImagePromptId(null);
+        }, 2000);
+      },
+      setImageError
+    );
+  };
+
+  const handleCopyImagePreviewPrompt = async (prompt) => {
+    if (!prompt) {
+      return;
+    }
+    await handleCopy(
+      prompt,
+      () => {
+        setCopiedImagePreviewPrompt(true);
+        if (copiedImagePreviewTimeoutRef.current) {
+          clearTimeout(copiedImagePreviewTimeoutRef.current);
+        }
+        copiedImagePreviewTimeoutRef.current = setTimeout(() => {
+          setCopiedImagePreviewPrompt(false);
+        }, 2000);
+      },
+      setImageError
+    );
+  };
+
   const handleDeleteTask = async (taskId) => {
     if (!taskId || !token) {
       return;
@@ -986,6 +1378,29 @@ export default function App() {
     }
   };
 
+  const handleDeleteImageTask = async (taskId) => {
+    if (!taskId || !token) {
+      return;
+    }
+    if (!window.confirm("确定要删除这条图片记录吗？")) {
+      return;
+    }
+    setImageError("");
+    try {
+      const response = await fetch(`/api/image/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: { "X-APP-TOKEN": token }
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "删除失败");
+      }
+      await fetchImageHistory();
+    } catch (err) {
+      setImageError(err.message || "删除失败");
+    }
+  };
+
   const handleDownload = (url) => {
     if (!url) {
       return;
@@ -1003,16 +1418,19 @@ export default function App() {
     localStorage.removeItem("app_token");
     setToken("");
     setHistory([]);
+    setImageHistory([]);
     setCurrentTask(null);
     setPreviewVideo(null);
     setActiveTab("generate");
     setBatchResult(null);
     setError("");
+    setImageError("");
     setUploads([]);
     setUploadsError("");
     setAdminUsername("");
     setAccountForm({ currentPassword: "", username: "", password: "" });
     setAccountStatus({ loading: false, error: "", success: "" });
+    setImageForm(initialImageForm);
   };
 
   const handleUpload = async (event) => {
@@ -1183,6 +1601,57 @@ export default function App() {
     }
   };
 
+  const handleImageSubmit = async (event) => {
+    event.preventDefault();
+    setImageError("");
+
+    if (!imageForm.prompt.trim()) {
+      setImageError("请输入提示词。");
+      return;
+    }
+
+    setImageLoading(true);
+
+    try {
+      const response = await fetch("/api/image/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "X-APP-TOKEN": token } : {})
+        },
+        body: JSON.stringify({
+          prompt: imageForm.prompt.trim(),
+          aspect_ratio: imageForm.aspect_ratio,
+          resolution: imageForm.resolution,
+          output_format: imageForm.output_format
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "图片任务创建失败");
+      }
+
+      const data = await response.json();
+      const localTaskId = data.task_id || data.task?.localTaskId;
+      const newTask = {
+        localTaskId,
+        createdAt: new Date().toISOString(),
+        prompt: imageForm.prompt.trim(),
+        status: "queued",
+        progress: 0,
+        image_url: null,
+        error: null
+      };
+
+      setImageHistory((prev) => [newTask, ...prev]);
+    } catch (err) {
+      setImageError(err.message);
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
   const handleAccountSubmit = async (event) => {
     event.preventDefault();
     if (!accountForm.currentPassword.trim()) {
@@ -1236,6 +1705,13 @@ export default function App() {
   const previewUrl = latestVideo?.video_url || latestVideo?.origin_video_url;
   const previewPrompt = latestVideo?.prompt;
 
+  const latestImage = useMemo(
+    () => imageHistory.find((task) => task.image_url),
+    [imageHistory]
+  );
+  const previewImageUrl = latestImage?.image_url;
+  const previewImagePrompt = latestImage?.prompt;
+
   if (!token) {
     return (
       <Login
@@ -1263,10 +1739,24 @@ export default function App() {
           </button>
           <button
             type="button"
+            className={`nav-item ${activeTab === "image" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("image")}
+          >
+            图片生成
+          </button>
+          <button
+            type="button"
             className={`nav-item ${activeTab === "history" ? "is-active" : ""}`}
             onClick={() => setActiveTab("history")}
           >
             历史记录
+          </button>
+          <button
+            type="button"
+            className={`nav-item ${activeTab === "image-history" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("image-history")}
+          >
+            图片历史
           </button>
           <button
             type="button"
@@ -1322,6 +1812,23 @@ export default function App() {
               setImagePreviewUrl={setImagePreviewUrl}
               localImagePreviewUrl={localImagePreviewUrl}
             />
+          ) : activeTab === "image" ? (
+            <ImageGenerateView
+              form={imageForm}
+              handleSubmit={handleImageSubmit}
+              handleChange={handleImageChange}
+              loading={imageLoading}
+              error={imageError}
+              latestImage={latestImage}
+              previewUrl={previewImageUrl}
+              previewPrompt={previewImagePrompt}
+              handleDownload={handleDownload}
+              handleCopyPreviewPrompt={handleCopyImagePreviewPrompt}
+              copiedPreviewPrompt={copiedImagePreviewPrompt}
+              historyLoading={imageHistoryLoading}
+              token={token}
+              fetchHistory={fetchImageHistory}
+            />
           ) : activeTab === "history" ? (
             <HistoryView
               history={history}
@@ -1333,6 +1840,17 @@ export default function App() {
               handleCopyPrompt={handleCopyPrompt}
               copiedPromptId={copiedPromptId}
               handleDeleteTask={handleDeleteTask}
+            />
+          ) : activeTab === "image-history" ? (
+            <ImageHistoryView
+              history={imageHistory}
+              historyLoading={imageHistoryLoading}
+              token={token}
+              fetchHistory={fetchImageHistory}
+              handleDownload={handleDownload}
+              handleCopyPrompt={handleCopyImagePrompt}
+              copiedPromptId={copiedImagePromptId}
+              handleDeleteTask={handleDeleteImageTask}
             />
           ) : (
             <AdminView
