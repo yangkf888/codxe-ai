@@ -19,7 +19,8 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME?.trim() || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD?.trim() || "123456";
 const KIE_API_KEY = process.env.KIE_API_KEY;
 const KIE_BASE_URL = process.env.KIE_BASE_URL || "https://api.kie.ai";
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "https://your-domain.com";
+const DEFAULT_PUBLIC_BASE_URL = "https://your-domain.com";
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || DEFAULT_PUBLIC_BASE_URL;
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6380";
 const TASK_TTL_SECONDS = Number(process.env.TASK_TTL_SECONDS || 60 * 60 * 24 * 7);
 const FILES_DIR = process.env.FILES_DIR || path.resolve(process.cwd(), "files");
@@ -49,13 +50,20 @@ const taskKey = (localTaskId) => `aiVideo:task:${localTaskId}`;
 const mapKey = (kieTaskId) => `aiVideo:map:${kieTaskId}`;
 const recentKey = "aiVideo:recent";
 
+const getPublicBaseUrl = () => {
+  if (!process.env.PUBLIC_BASE_URL || PUBLIC_BASE_URL === DEFAULT_PUBLIC_BASE_URL) {
+    return "";
+  }
+  return PUBLIC_BASE_URL.replace(/\/+$/, "");
+};
+
 const buildPublicVideoUrl = (localTaskId) => {
-  const base = PUBLIC_BASE_URL.replace(/\/+$/, "");
+  const base = getPublicBaseUrl();
   return `${base}${NORMALIZED_FILES_PATH}/${localTaskId}.mp4`;
 };
 
 const buildPublicUploadUrl = (filename) => {
-  const base = PUBLIC_BASE_URL.replace(/\/+$/, "");
+  const base = getPublicBaseUrl();
   return `${base}${UPLOADS_PUBLIC_PATH}/${filename}`;
 };
 
