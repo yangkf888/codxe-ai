@@ -440,6 +440,7 @@ select {
 
 .segmented-control {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   background: #0f172a;
   border: 1px solid #334155;
@@ -449,15 +450,16 @@ select {
 }
 
 .segment {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   background: transparent;
   padding: 6px 8px;
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
   color: #94a3b8;
-  min-width: 0;
+  min-width: 72px;
   text-align: center;
+  white-space: nowrap;
 }
 
 .segment.is-active {
