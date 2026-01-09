@@ -94,6 +94,7 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  height: 100vh;
 }
 
 .app-header {
@@ -120,7 +121,8 @@ button {
   flex-direction: column;
   gap: 24px;
   overflow-y: auto;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .sidebar-token {
