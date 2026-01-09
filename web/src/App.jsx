@@ -1,8 +1,36 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Login from "./Login.jsx";
 
+const videoModels = {
+  t2v: [
+    { value: "sora-2-text-to-video", label: "Sora 2 普通" },
+    { value: "sora-2-pro-text-to-video", label: "Sora 2 Pro" }
+  ],
+  i2v: [
+    { value: "sora-2-image-to-video", label: "Sora 2 普通" },
+    { value: "sora-2-pro-image-to-video", label: "Sora 2 Pro" }
+  ]
+};
+
+const videoModelDefaults = {
+  t2v: "sora-2-text-to-video",
+  i2v: "sora-2-image-to-video"
+};
+
+const videoQualityOptions = [
+  { value: "standard", label: "标清" },
+  { value: "high", label: "高清" }
+];
+
+const videoDefaultQuality = {
+  t2v: "high",
+  i2v: "standard"
+};
+
 const initialForm = {
   mode: "t2v",
+  model: videoModelDefaults.t2v,
+  size: videoDefaultQuality.t2v,
   prompt: "",
   image_url: "",
   duration: "10",
@@ -232,6 +260,8 @@ function GenerateView({
     }
     return actualProgress;
   }, [isQueuedOrRunning, previewTask?.progress, simulatedProgress]);
+  const modelOptions = videoModels[form.mode] || [];
+  const isProVideoModel = form.model?.includes("-pro-");
 
   return (
     <section className="generate-view">
@@ -245,6 +275,17 @@ function GenerateView({
             <select id="mode" name="mode" value={form.mode} onChange={handleChange}>
               <option value="t2v">文生视频</option>
               <option value="i2v">图生视频</option>
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="model">视频模型</label>
+            <select id="model" name="model" value={form.model} onChange={handleChange}>
+              {modelOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -347,6 +388,18 @@ function GenerateView({
                   ))}
                 </div>
               </div>
+              {isProVideoModel && (
+                <div className="field">
+                  <label htmlFor="size">清晰度</label>
+                  <select id="size" name="size" value={form.size} onChange={handleChange}>
+                    {videoQualityOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1189,6 +1242,7 @@ export default function App() {
     () => history.some((task) => !terminalStatuses.has(task.status)),
     [history]
   );
+  const isProVideoModel = form.model?.includes("-pro-");
 
   const shouldPollImages = useMemo(
     () => imageHistory.some((task) => !terminalStatuses.has(task.status)),
@@ -1475,12 +1529,35 @@ export default function App() {
     return () => clearInterval(interval);
   }, [currentTask, pollTaskStatus]);
 
+  const getDefaultModelForMode = useCallback((mode, preferPro) => {
+    if (preferPro) {
+      return mode === "i2v" ? "sora-2-pro-image-to-video" : "sora-2-pro-text-to-video";
+    }
+    return videoModelDefaults[mode] || videoModelDefaults.t2v;
+  }, []);
+
+  const getDefaultQualityForMode = useCallback(
+    (mode) => videoDefaultQuality[mode] || videoDefaultQuality.t2v,
+    []
+  );
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => {
       const next = { ...prev, [name]: value };
-      if (name === "mode" && value === "t2v") {
-        next.image_url = "";
+      if (name === "mode") {
+        const preferPro = prev.model?.includes("-pro-");
+        next.model = getDefaultModelForMode(value, preferPro);
+        next.size = preferPro ? getDefaultQualityForMode(value) : prev.size;
+        if (value === "t2v") {
+          next.image_url = "";
+        }
+      }
+      if (name === "model") {
+        const isPro = value.includes("-pro-");
+        if (isPro) {
+          next.size = getDefaultQualityForMode(prev.mode);
+        }
       }
       return next;
     });
@@ -1821,10 +1898,12 @@ export default function App() {
       if (batchMode) {
         const jobs = Array.from({ length: batchCount }, () => ({
           mode: form.mode,
+          model: form.model,
           prompt: form.prompt.trim(),
           image_url: form.mode === "i2v" ? form.image_url : undefined,
           duration: Number(form.duration),
-          aspect_ratio: form.aspect_ratio
+          aspect_ratio: form.aspect_ratio,
+          size: isProVideoModel ? form.size : undefined
         }));
 
         const response = await fetch("/api/video/batch_create", {
@@ -1889,10 +1968,12 @@ export default function App() {
           },
           body: JSON.stringify({
             mode: form.mode,
+            model: form.model,
             prompt: form.prompt,
             image_url: form.mode === "i2v" ? form.image_url : undefined,
             duration: Number(form.duration),
-            aspect_ratio: form.aspect_ratio
+            aspect_ratio: form.aspect_ratio,
+            size: isProVideoModel ? form.size : undefined
           })
         });
 
