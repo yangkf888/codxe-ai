@@ -23,6 +23,16 @@
 - `/api/callback` 接收 Kie AI 回调更新任务状态；回调成功后下载视频到本地并保存 7 天。
 - Redis 持久化任务状态与 `kieTaskId -> localTaskId` 映射，服务重启后仍可恢复。
 
+## API 商家（第三方服务）
+
+本项目当前对接的第三方视频生成服务为 **Kie AI**：
+
+- 官网：<https://kie.ai>
+- 接口用途：文本生视频（t2v）、图生视频（i2v）任务创建与回调。
+- 关键配置：`KIE_API_KEY`、`KIE_T2V_MODEL`、`KIE_I2V_MODEL`。
+
+如需接入其他供应商，可在后端替换相关请求与回调适配逻辑。
+
 ## 后端 API 约定
 
 ### Header
