@@ -195,6 +195,20 @@ const parseResultVideoUrl = (rawResultJson) => {
   return null;
 };
 
+const normalizeTaskStatus = (status) => {
+  if (!status) {
+    return status;
+  }
+  const normalized = String(status).toLowerCase();
+  if (["success", "succeeded", "completed", "complete", "done"].includes(normalized)) {
+    return "success";
+  }
+  if (["fail", "failed", "failure", "error", "errored"].includes(normalized)) {
+    return "fail";
+  }
+  return normalized;
+};
+
 app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -567,7 +581,7 @@ app.delete("/api/tasks/:id", async (req, res) => {
 
 app.post("/api/callback", async (req, res) => {
   const kieTaskId = req.body?.data?.taskId;
-  const state = req.body?.data?.state;
+  const state = normalizeTaskStatus(req.body?.data?.state);
   const progress = req.body?.data?.progress;
 
   if (!kieTaskId) {
