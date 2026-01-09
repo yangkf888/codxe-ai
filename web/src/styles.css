@@ -192,7 +192,8 @@ button {
   gap: 80px;
   align-items: start;
   max-width: 100%;
-  height: 100%;
+  height: calc(100vh - 160px);
+  overflow: hidden;
 }
 
 .generate-left,
@@ -200,13 +201,21 @@ button {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-height: calc(100vh - 160px);
+  min-height: 0;
 }
 
 .generate-left {
   position: sticky;
-  top: 24px;
-  height: fit-content;
+  top: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  padding-right: 4px;
+  height: 100%;
+}
+
+.generate-right {
+  overflow-y: auto;
+  padding-right: 12px;
 }
 
 .panel-header h1 {
