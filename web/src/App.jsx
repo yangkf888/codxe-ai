@@ -15,10 +15,11 @@ const statusLabels = {
   success: "已完成",
   fail: "失败",
   succeeded: "已完成",
-  failed: "失败"
+  failed: "失败",
+  failure: "失败"
 };
 
-const terminalStatuses = new Set(["success", "fail", "succeeded", "failed"]);
+const terminalStatuses = new Set(["success", "fail", "succeeded", "failed", "failure"]);
 
 const durations = [
   { value: "10", label: "10 秒" },
