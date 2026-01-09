@@ -884,6 +884,88 @@ select {
   background: #0b1120;
 }
 
+.admin-view {
+  display: grid;
+  gap: 24px;
+}
+
+.admin-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.admin-card {
+  border-radius: 16px;
+  border: 1px solid #334155;
+  background: #111827;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.admin-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-card-header h2 {
+  font-size: 18px;
+}
+
+.upload-list {
+  display: grid;
+  gap: 12px;
+}
+
+.upload-card {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #1f2937;
+  background: #0f172a;
+}
+
+.upload-thumb {
+  width: 120px;
+  height: 90px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #334155;
+  background: #0b1120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upload-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.upload-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.upload-sub {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
 @media (max-width: 960px) {
   .app-layout {
     grid-template-columns: 1fr;
