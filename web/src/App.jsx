@@ -180,9 +180,17 @@ function GenerateView({
                   ref={imageUploadRef}
                   className="upload-input"
                 />
-                {form.image_url ? (
+                {form.image_url || imagePreviewUrl ? (
                   <div className="image-preview">
-                    <img src={form.image_url} alt="上传预览" />
+                    <img
+                      src={imagePreviewUrl || form.image_url}
+                      alt="上传预览"
+                      onError={() => {
+                        if (localImagePreviewUrl && imagePreviewUrl !== localImagePreviewUrl) {
+                          setImagePreviewUrl(localImagePreviewUrl);
+                        }
+                      }}
+                    />
                     <button
                       type="button"
                       className="secondary"
@@ -492,6 +500,8 @@ export default function App() {
     message: "",
     fileName: ""
   });
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [localImagePreviewUrl, setLocalImagePreviewUrl] = useState("");
   const imageUploadRef = useRef(null);
   const copiedPromptTimeoutRef = useRef(null);
   const copiedPreviewTimeoutRef = useRef(null);
@@ -588,6 +598,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (localImagePreviewUrl) {
+        URL.revokeObjectURL(localImagePreviewUrl);
+      }
+    };
+  }, [localImagePreviewUrl]);
+
+  useEffect(() => {
     if (!shouldPoll) {
       return undefined;
     }
@@ -665,9 +683,20 @@ export default function App() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === "mode" && value === "t2v") {
+        next.image_url = "";
+      }
+      return next;
+    });
     if (name === "image_url") {
       setUploadState({ status: "idle", message: "", fileName: "" });
+    }
+    if (name === "mode" && value === "t2v") {
+      setUploadState({ status: "idle", message: "", fileName: "" });
+      setImagePreviewUrl("");
+      setLocalImagePreviewUrl("");
     }
   };
 
@@ -769,6 +798,10 @@ export default function App() {
       return;
     }
 
+    const objectUrl = URL.createObjectURL(file);
+    setLocalImagePreviewUrl(objectUrl);
+    setImagePreviewUrl(objectUrl);
+
     const formData = new FormData();
     formData.append("file", file);
     setUploadState({ status: "uploading", message: "上传中...", fileName: file.name });
@@ -790,6 +823,7 @@ export default function App() {
         throw new Error("上传图片失败");
       }
       setForm((prev) => ({ ...prev, image_url: imageUrl }));
+      setImagePreviewUrl(imageUrl);
       setUploadState({ status: "success", message: "上传完成", fileName: file.name });
       setError("");
     } catch (err) {
