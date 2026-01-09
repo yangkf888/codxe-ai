@@ -948,6 +948,10 @@ select {
   margin-bottom: 12px;
 }
 
+.history-table-header > div:last-child {
+  text-align: right;
+}
+
 .history-row {
   display: grid;
   grid-template-columns: 140px minmax(240px, 1fr) 120px minmax(240px, 1fr);
