@@ -401,6 +401,16 @@ const frameMap = {
   15: "15"
 };
 
+const videoModels = {
+  t2v: new Set(["sora-2-text-to-video", "sora-2-pro-text-to-video"]),
+  i2v: new Set(["sora-2-image-to-video", "sora-2-pro-image-to-video"])
+};
+const videoQualityOptions = new Set(["standard", "high"]);
+const videoDefaultQuality = {
+  t2v: "high",
+  i2v: "standard"
+};
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: async (req, file, cb) => {
@@ -466,11 +476,13 @@ const kieClient = {
 const createOne = async (job = {}, { baseUrl = "" } = {}) => {
   const {
     mode,
+    model: requestedModel,
     prompt,
     image_url,
     image_urls,
     duration = 5,
     aspect_ratio = "16:9",
+    size,
     character_id_list,
     batchCount = 1
   } = job;
@@ -502,16 +514,33 @@ const createOne = async (job = {}, { baseUrl = "" } = {}) => {
 
   const t2vModel = process.env.KIE_T2V_MODEL || "sora-2-text-to-video";
   const i2vModel = process.env.KIE_I2V_MODEL || "sora-2-image-to-video";
-  const model = mode === "i2v" ? i2vModel : t2vModel;
+  const model = (requestedModel || (mode === "i2v" ? i2vModel : t2vModel)).trim();
+
+  if (requestedModel) {
+    const allowedModels = videoModels[mode];
+    if (!allowedModels || !allowedModels.has(model)) {
+      throw new ApiError(400, "Invalid model");
+    }
+  }
 
   const normalizedBatchCount = Math.min(Math.max(Number(batchCount) || 1, 1), 20);
 
+  let resolvedSize;
   const input = {
     prompt,
     aspect_ratio: resolvedAspectRatio,
     n_frames: resolvedFrames,
     remove_watermark: true
   };
+
+  if (model.includes("-pro-")) {
+    const defaultQuality = videoDefaultQuality[mode] || "high";
+    resolvedSize = String(size || defaultQuality).toLowerCase();
+    if (!videoQualityOptions.has(resolvedSize)) {
+      throw new ApiError(400, "Invalid size");
+    }
+    input.size = resolvedSize;
+  }
 
   if (mode === "i2v") {
     input.image_urls = resolvedImageUrls;
@@ -547,16 +576,18 @@ const createOne = async (job = {}, { baseUrl = "" } = {}) => {
         origin_video_url: null,
         error: null,
         kieTaskId,
-        params: {
-          mode,
-          prompt,
-          image_url: resolvedImageUrls[0] || null,
-          image_urls: resolvedImageUrls,
-          duration,
-          aspect_ratio,
-          remove_watermark,
-          character_id_list,
-          batchCount: normalizedBatchCount
+          params: {
+            mode,
+            model,
+            prompt,
+            image_url: resolvedImageUrls[0] || null,
+            image_urls: resolvedImageUrls,
+            duration,
+            aspect_ratio,
+            size: resolvedSize,
+            remove_watermark,
+            character_id_list,
+            batchCount: normalizedBatchCount
         }
       };
 
