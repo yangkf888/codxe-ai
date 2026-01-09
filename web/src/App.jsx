@@ -66,6 +66,24 @@ const formatTimestamp = (value) => {
   return date.toLocaleString();
 };
 
+const formatBytes = (value) => {
+  const size = Number(value);
+  if (Number.isNaN(size) || size <= 0) {
+    return "0 B";
+  }
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  const units = ["KB", "MB", "GB"];
+  let idx = -1;
+  let result = size;
+  while (result >= 1024 && idx < units.length - 1) {
+    result /= 1024;
+    idx += 1;
+  }
+  return `${result.toFixed(1)} ${units[idx]}`;
+};
+
 function SimulatedProgressRow({ status, isHistory }) {
   const [percent, setPercent] = useState(0);
 
@@ -483,6 +501,135 @@ function HistoryView({
   );
 }
 
+function AdminView({
+  adminUsername,
+  accountForm,
+  setAccountForm,
+  accountStatus,
+  handleAccountSubmit,
+  uploads,
+  uploadsLoading,
+  uploadsError,
+  fetchUploads,
+  handleDownload
+}) {
+  return (
+    <section className="admin-view">
+      <div className="panel-header">
+        <h1>管理后台</h1>
+        <p className="muted">管理管理员账号与近期上传图片。</p>
+      </div>
+      <div className="admin-grid">
+        <div className="admin-card">
+          <div className="admin-card-header">
+            <div>
+              <h2>账号设置</h2>
+              <p className="muted">
+                当前管理员账号：<strong>{adminUsername || "-"}</strong>
+              </p>
+            </div>
+          </div>
+          <form className="form" onSubmit={handleAccountSubmit}>
+            <div className="field">
+              <label htmlFor="current_password">当前密码</label>
+              <input
+                id="current_password"
+                name="currentPassword"
+                type="password"
+                value={accountForm.currentPassword}
+                onChange={(event) =>
+                  setAccountForm((prev) => ({
+                    ...prev,
+                    currentPassword: event.target.value
+                  }))
+                }
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="new_username">新用户名</label>
+              <input
+                id="new_username"
+                name="username"
+                value={accountForm.username}
+                onChange={(event) =>
+                  setAccountForm((prev) => ({ ...prev, username: event.target.value }))
+                }
+                autoComplete="username"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="new_password">新密码</label>
+              <input
+                id="new_password"
+                name="password"
+                type="password"
+                value={accountForm.password}
+                onChange={(event) =>
+                  setAccountForm((prev) => ({ ...prev, password: event.target.value }))
+                }
+                autoComplete="new-password"
+              />
+            </div>
+            {accountStatus.error && <p className="error">{accountStatus.error}</p>}
+            {accountStatus.success && (
+              <p className="notice">{accountStatus.success}</p>
+            )}
+            <button className="primary" type="submit" disabled={accountStatus.loading}>
+              {accountStatus.loading ? "更新中..." : "更新账号"}
+            </button>
+          </form>
+        </div>
+
+        <div className="admin-card">
+          <div className="admin-card-header">
+            <div>
+              <h2>近期上传图片</h2>
+              <p className="muted">可下载最近上传的参考图。</p>
+            </div>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => fetchUploads()}
+              disabled={uploadsLoading}
+            >
+              {uploadsLoading ? "加载中..." : "刷新"}
+            </button>
+          </div>
+          {uploadsError && <p className="error">{uploadsError}</p>}
+          {uploads.length === 0 ? (
+            <p className="muted">暂无上传图片。</p>
+          ) : (
+            <div className="upload-list">
+              {uploads.map((upload) => (
+                <div key={upload.filename} className="upload-card">
+                  <div className="upload-thumb">
+                    <img src={upload.url} alt={upload.filename} loading="lazy" />
+                  </div>
+                  <div className="upload-meta">
+                    <div className="upload-name">{upload.filename}</div>
+                    <div className="upload-sub">
+                      <span>{formatBytes(upload.size)}</span>
+                      <span>{formatTimestamp(upload.uploadedAt)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => handleDownload(upload.url)}
+                    >
+                      下载图片
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const [form, setForm] = useState(initialForm);
   const [simulatedProgress, setSimulatedProgress] = useState(0);
@@ -504,6 +651,20 @@ export default function App() {
     message: "",
     fileName: ""
   });
+  const [adminUsername, setAdminUsername] = useState("");
+  const [accountForm, setAccountForm] = useState({
+    currentPassword: "",
+    username: "",
+    password: ""
+  });
+  const [accountStatus, setAccountStatus] = useState({
+    loading: false,
+    error: "",
+    success: ""
+  });
+  const [uploads, setUploads] = useState([]);
+  const [uploadsLoading, setUploadsLoading] = useState(false);
+  const [uploadsError, setUploadsError] = useState("");
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [localImagePreviewUrl, setLocalImagePreviewUrl] = useState("");
   const imageUploadRef = useRef(null);
@@ -549,9 +710,63 @@ export default function App() {
     [token]
   );
 
+  const fetchAdminAccount = useCallback(async () => {
+    if (!token) {
+      return;
+    }
+    try {
+      const response = await fetch("/api/admin/account", {
+        headers: { "X-APP-TOKEN": token }
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      setAdminUsername(data.username || "");
+    } catch (err) {
+      return;
+    }
+  }, [token]);
+
+  const fetchUploads = useCallback(
+    async (silent = false) => {
+      if (!token) {
+        return;
+      }
+      if (!silent) {
+        setUploadsLoading(true);
+        setUploadsError("");
+      }
+      try {
+        const response = await fetch("/api/admin/uploads?limit=50", {
+          headers: { "X-APP-TOKEN": token }
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "加载上传图片失败");
+        }
+        const data = await response.json();
+        setUploads(data.uploads || []);
+      } catch (err) {
+        if (!silent) {
+          setUploadsError(err.message || "加载上传图片失败");
+        }
+      } finally {
+        if (!silent) {
+          setUploadsLoading(false);
+        }
+      }
+    },
+    [token]
+  );
+
   useEffect(() => {
     fetchHistory();
   }, [fetchHistory]);
+
+  useEffect(() => {
+    fetchAdminAccount();
+  }, [fetchAdminAccount]);
 
   useEffect(() => {
     const status = currentTask?.status;
@@ -793,6 +1008,11 @@ export default function App() {
     setActiveTab("generate");
     setBatchResult(null);
     setError("");
+    setUploads([]);
+    setUploadsError("");
+    setAdminUsername("");
+    setAccountForm({ currentPassword: "", username: "", password: "" });
+    setAccountStatus({ loading: false, error: "", success: "" });
   };
 
   const handleUpload = async (event) => {
@@ -963,6 +1183,51 @@ export default function App() {
     }
   };
 
+  const handleAccountSubmit = async (event) => {
+    event.preventDefault();
+    if (!accountForm.currentPassword.trim()) {
+      setAccountStatus({ loading: false, error: "请输入当前密码。", success: "" });
+      return;
+    }
+    if (!accountForm.username.trim() && !accountForm.password.trim()) {
+      setAccountStatus({
+        loading: false,
+        error: "请输入新的用户名或密码。",
+        success: ""
+      });
+      return;
+    }
+    setAccountStatus({ loading: true, error: "", success: "" });
+    try {
+      const response = await fetch("/api/admin/account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-APP-TOKEN": token
+        },
+        body: JSON.stringify({
+          currentPassword: accountForm.currentPassword,
+          username: accountForm.username || undefined,
+          password: accountForm.password || undefined
+        })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "更新账号失败");
+      }
+      const data = await response.json();
+      setAdminUsername(data.username || "");
+      setAccountForm({ currentPassword: "", username: "", password: "" });
+      setAccountStatus({ loading: false, error: "", success: "账号已更新。" });
+    } catch (err) {
+      setAccountStatus({
+        loading: false,
+        error: err.message || "更新账号失败",
+        success: ""
+      });
+    }
+  };
+
   const latestVideo = useMemo(
     () => history.find((task) => task.video_url || task.origin_video_url),
     [history]
@@ -1002,6 +1267,16 @@ export default function App() {
             onClick={() => setActiveTab("history")}
           >
             历史记录
+          </button>
+          <button
+            type="button"
+            className={`nav-item ${activeTab === "admin" ? "is-active" : ""}`}
+            onClick={() => {
+              setActiveTab("admin");
+              fetchUploads();
+            }}
+          >
+            管理后台
           </button>
         </nav>
       </aside>
@@ -1047,7 +1322,7 @@ export default function App() {
               setImagePreviewUrl={setImagePreviewUrl}
               localImagePreviewUrl={localImagePreviewUrl}
             />
-          ) : (
+          ) : activeTab === "history" ? (
             <HistoryView
               history={history}
               historyLoading={historyLoading}
@@ -1058,6 +1333,19 @@ export default function App() {
               handleCopyPrompt={handleCopyPrompt}
               copiedPromptId={copiedPromptId}
               handleDeleteTask={handleDeleteTask}
+            />
+          ) : (
+            <AdminView
+              adminUsername={adminUsername}
+              accountForm={accountForm}
+              setAccountForm={setAccountForm}
+              accountStatus={accountStatus}
+              handleAccountSubmit={handleAccountSubmit}
+              uploads={uploads}
+              uploadsLoading={uploadsLoading}
+              uploadsError={uploadsError}
+              fetchUploads={fetchUploads}
+              handleDownload={handleDownload}
             />
           )}
         </main>

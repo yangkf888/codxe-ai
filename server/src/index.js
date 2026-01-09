@@ -49,6 +49,9 @@ redisClient.on("error", (error) => {
 const taskKey = (localTaskId) => `aiVideo:task:${localTaskId}`;
 const mapKey = (kieTaskId) => `aiVideo:map:${kieTaskId}`;
 const recentKey = "aiVideo:recent";
+const adminKey = "aiVideo:admin";
+let adminUsername = ADMIN_USERNAME;
+let adminPassword = ADMIN_PASSWORD;
 
 const normalizeBaseUrl = (value) => {
   if (!value) {
@@ -151,6 +154,37 @@ const parseTask = (raw) => {
 const getTask = async (localTaskId) => {
   const raw = await redisClient.get(taskKey(localTaskId));
   return parseTask(raw);
+};
+
+const loadAdminCredentials = async () => {
+  const raw = await redisClient.get(adminKey);
+  if (!raw) {
+    return;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.username) {
+      adminUsername = parsed.username;
+    }
+    if (parsed?.password) {
+      adminPassword = parsed.password;
+    }
+  } catch (error) {
+    console.warn(`Failed to parse admin credentials: ${error.message}`);
+  }
+};
+
+const saveAdminCredentials = async ({ username, password }) => {
+  adminUsername = username;
+  adminPassword = password;
+  await redisClient.set(
+    adminKey,
+    JSON.stringify({
+      username,
+      password,
+      updatedAt: new Date().toISOString()
+    })
+  );
 };
 
 const saveTask = async (task, { refreshRecent = false } = {}) => {
@@ -498,10 +532,33 @@ app.use((req, res, next) => {
 
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body || {};
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+  if (username === adminUsername && password === adminPassword) {
     return res.json({ success: true, token: APP_TOKEN });
   }
   return res.status(401).json({ success: false, error: "Unauthorized" });
+});
+
+app.get("/api/admin/account", (req, res) => {
+  return res.json({ username: adminUsername });
+});
+
+app.post("/api/admin/account", async (req, res) => {
+  const { currentPassword, username, password } = req.body || {};
+  if (!currentPassword) {
+    return res.status(400).json({ error: "currentPassword is required" });
+  }
+  if (currentPassword !== adminPassword) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const nextUsername = (username ?? "").trim();
+  const nextPassword = (password ?? "").trim();
+  if (!nextUsername && !nextPassword) {
+    return res.status(400).json({ error: "username or password is required" });
+  }
+  const updatedUsername = nextUsername || adminUsername;
+  const updatedPassword = nextPassword || adminPassword;
+  await saveAdminCredentials({ username: updatedUsername, password: updatedPassword });
+  return res.json({ success: true, username: updatedUsername });
 });
 
 app.post("/api/video/create", limiter, async (req, res) => {
@@ -630,6 +687,40 @@ app.get("/api/video/list", async (req, res) => {
   return res.json({ tasks });
 });
 
+app.get("/api/admin/uploads", async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 200);
+  try {
+    await ensureUploadsDir();
+    const entries = await fs.promises.readdir(UPLOADS_DIR, { withFileTypes: true });
+    const files = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile())
+        .map(async (entry) => {
+          const filePath = path.join(UPLOADS_DIR, entry.name);
+          const stats = await fs.promises.stat(filePath);
+          return {
+            name: entry.name,
+            size: stats.size,
+            uploadedAt: stats.mtime.toISOString(),
+            mtimeMs: stats.mtimeMs
+          };
+        })
+    );
+    files.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    const baseUrl = getRequestBaseUrl(req);
+    const trimmed = files.slice(0, limit).map((file) => ({
+      filename: file.name,
+      size: file.size,
+      uploadedAt: file.uploadedAt,
+      url: buildPublicUploadUrl(file.name, baseUrl)
+    }));
+    return res.json({ uploads: trimmed });
+  } catch (error) {
+    console.warn(`Failed to list uploads: ${error.message}`);
+    return res.status(500).json({ error: "Failed to list uploads" });
+  }
+});
+
 app.delete("/api/tasks/:id", async (req, res) => {
   const localTaskId = req.params.id;
   if (!localTaskId) {
@@ -716,6 +807,7 @@ app.get("/health", (req, res) => {
 const startServer = async () => {
   try {
     await redisClient.connect();
+    await loadAdminCredentials();
     await ensureFilesDir();
     await ensureUploadsDir();
     await cleanupOldFiles();
