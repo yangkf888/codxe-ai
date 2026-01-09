@@ -430,73 +430,75 @@ function GenerateView({
               {historyLoading ? "刷新中..." : "刷新"}
             </button>
           </div>
-          <div className="preview-list">
-            {recentHistory.length > 0 ? (
-              recentHistory.map((task) => {
-                const taskPreviewUrl = task.origin_video_url || task.video_url;
-                const isActiveTask = previewTask?.localTaskId === task.localTaskId;
-                return (
-                  <div key={task.localTaskId} className="preview-item">
-                    <div className="preview-card-player">
-                      {taskPreviewUrl ? (
-                        <video
-                          controls
-                          src={taskPreviewUrl}
-                          className="preview-player"
-                          playsInline
-                        />
-                      ) : (
-                        <div className="preview-thumb-empty">暂无预览</div>
-                      )}
-                    </div>
-                    <div className="preview-meta">
-                      <div className="preview-prompt">{formatPrompt(task.prompt)}</div>
-                      <div className="preview-meta-line">
-                        <span>{formatTimestamp(task.createdAt)}</span>
-                        <span className={`status status-${task.status}`}>
-                          {statusLabels[task.status] || task.status}
-                        </span>
+          <div className="preview-body">
+            <div className="preview-list">
+              {recentHistory.length > 0 ? (
+                recentHistory.map((task) => {
+                  const taskPreviewUrl = task.origin_video_url || task.video_url;
+                  const isActiveTask = previewTask?.localTaskId === task.localTaskId;
+                  return (
+                    <div key={task.localTaskId} className="preview-item">
+                      <div className="preview-card-player">
+                        {taskPreviewUrl ? (
+                          <video
+                            controls
+                            src={taskPreviewUrl}
+                            className="preview-player"
+                            playsInline
+                          />
+                        ) : (
+                          <div className="preview-thumb-empty">暂无预览</div>
+                        )}
                       </div>
-                      {isActiveTask && isQueuedOrRunning ? (
-                        <div className="progress-container">
-                          <div
-                            className="progress-bar-fill"
-                            style={{ width: `${previewProgress ?? 0}%` }}
-                          ></div>
-                          <span className="progress-text">
-                            {Math.floor(previewProgress ?? 0)}%
+                      <div className="preview-meta">
+                        <div className="preview-prompt">{formatPrompt(task.prompt)}</div>
+                        <div className="preview-meta-line">
+                          <span>{formatTimestamp(task.createdAt)}</span>
+                          <span className={`status status-${task.status}`}>
+                            {statusLabels[task.status] || task.status}
                           </span>
                         </div>
-                      ) : isActiveTask && statusLabel ? (
-                        <p className="muted">{statusLabel}</p>
-                      ) : null}
-                      <div className="preview-actions">
-                        <button
-                          className="action-btn"
-                          type="button"
-                          onClick={() => handleDownload(taskPreviewUrl)}
-                          disabled={!taskPreviewUrl}
-                        >
-                          下载视频
-                        </button>
-                        <button
-                          className="action-btn"
-                          type="button"
-                          onClick={() => handleCopyPreviewPrompt(task.prompt)}
-                          disabled={!task.prompt}
-                        >
-                          {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
-                        </button>
+                        {isActiveTask && isQueuedOrRunning ? (
+                          <div className="progress-container">
+                            <div
+                              className="progress-bar-fill"
+                              style={{ width: `${previewProgress ?? 0}%` }}
+                            ></div>
+                            <span className="progress-text">
+                              {Math.floor(previewProgress ?? 0)}%
+                            </span>
+                          </div>
+                        ) : isActiveTask && statusLabel ? (
+                          <p className="muted">{statusLabel}</p>
+                        ) : null}
+                        <div className="preview-actions">
+                          <button
+                            className="action-btn"
+                            type="button"
+                            onClick={() => handleDownload(taskPreviewUrl)}
+                            disabled={!taskPreviewUrl}
+                          >
+                            下载视频
+                          </button>
+                          <button
+                            className="action-btn"
+                            type="button"
+                            onClick={() => handleCopyPreviewPrompt(task.prompt)}
+                            disabled={!task.prompt}
+                          >
+                            {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="preview-empty">
-                <p className="muted">暂无生成记录，先提交任务试试吧。</p>
-              </div>
-            )}
+                  );
+                })
+              ) : (
+                <div className="preview-empty">
+                  <p className="muted">暂无生成记录，先提交任务试试吧。</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -738,60 +740,62 @@ function ImageGenerateView({
               {historyLoading ? "刷新中..." : "刷新"}
             </button>
           </div>
-          <div className="preview-media">
-            {latestImage ? (
-              <img src={previewUrl} alt="生成预览" className="preview-image" />
-            ) : (
-              <div className="preview-empty">
-                <p className="muted">暂无可预览的图片，生成完成后会出现在这里。</p>
-              </div>
-            )}
-          </div>
-          <div className="preview-actions">
-            <button
-              className="action-btn"
-              type="button"
-              onClick={() => handleDownload(previewUrl)}
-              disabled={!previewUrl}
-            >
-              下载图片
-            </button>
-            <button
-              className="action-btn"
-              type="button"
-              onClick={() => handleCopyPreviewPrompt(previewPrompt)}
-              disabled={!previewPrompt}
-            >
-              {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
-            </button>
-          </div>
-          <div className="preview-list">
-            {recentHistory.length > 0 ? (
-              recentHistory.map((task) => (
-                <div key={task.localTaskId} className="preview-item">
-                  <div className="preview-thumb">
-                    {task.image_url ? (
-                      <img src={task.image_url} alt="历史预览" />
-                    ) : (
-                      <div className="preview-thumb-empty">暂无预览</div>
-                    )}
-                  </div>
-                  <div className="preview-meta">
-                    <div className="preview-prompt">{formatPrompt(task.prompt)}</div>
-                    <div className="preview-meta-line">
-                      <span>{formatTimestamp(task.createdAt)}</span>
-                      <span className={`status status-${task.status}`}>
-                        {statusLabels[task.status] || task.status}
-                      </span>
+          <div className="preview-body">
+            <div className="preview-media">
+              {latestImage ? (
+                <img src={previewUrl} alt="生成预览" className="preview-image" />
+              ) : (
+                <div className="preview-empty">
+                  <p className="muted">暂无可预览的图片，生成完成后会出现在这里。</p>
+                </div>
+              )}
+            </div>
+            <div className="preview-actions">
+              <button
+                className="action-btn"
+                type="button"
+                onClick={() => handleDownload(previewUrl)}
+                disabled={!previewUrl}
+              >
+                下载图片
+              </button>
+              <button
+                className="action-btn"
+                type="button"
+                onClick={() => handleCopyPreviewPrompt(previewPrompt)}
+                disabled={!previewPrompt}
+              >
+                {copiedPreviewPrompt ? "✅ 已复制" : "复制提示词"}
+              </button>
+            </div>
+            <div className="preview-list">
+              {recentHistory.length > 0 ? (
+                recentHistory.map((task) => (
+                  <div key={task.localTaskId} className="preview-item">
+                    <div className="preview-thumb">
+                      {task.image_url ? (
+                        <img src={task.image_url} alt="历史预览" />
+                      ) : (
+                        <div className="preview-thumb-empty">暂无预览</div>
+                      )}
+                    </div>
+                    <div className="preview-meta">
+                      <div className="preview-prompt">{formatPrompt(task.prompt)}</div>
+                      <div className="preview-meta-line">
+                        <span>{formatTimestamp(task.createdAt)}</span>
+                        <span className={`status status-${task.status}`}>
+                          {statusLabels[task.status] || task.status}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="preview-empty">
+                  <p className="muted">暂无生成记录，先提交任务试试吧。</p>
                 </div>
-              ))
-            ) : (
-              <div className="preview-empty">
-                <p className="muted">暂无生成记录，先提交任务试试吧。</p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
