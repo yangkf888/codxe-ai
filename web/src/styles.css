@@ -119,6 +119,31 @@ button {
   height: 100vh;
 }
 
+.announcement-bar {
+  background: #f97316;
+  color: #0f172a;
+  font-weight: 700;
+  padding: 8px 0;
+  border-bottom: 1px solid #ea580c;
+  overflow: hidden;
+}
+
+.announcement-text {
+  display: inline-block;
+  padding-left: 100%;
+  white-space: nowrap;
+  animation: announcement-scroll 18s linear infinite;
+}
+
+@keyframes announcement-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
 .app-header {
   height: 60px;
   background: #1e293b;
