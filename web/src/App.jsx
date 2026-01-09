@@ -2190,13 +2190,13 @@ export default function App() {
       </aside>
 
       <div className="main-content-wrapper">
-        <div className="announcement-bar">
-          <div className="announcement-text" aria-live="polite">
-            ⚠️ 本站仅供个人学习测试，严禁商用，生成内容请遵守当地法律法规。支持批量生成，最大批量20条
-          </div>
-        </div>
         <header className="app-header">
-          <span>YKF-AI 创作中心</span>
+          <div className="app-header__info">
+            <span>YKF-AI 创作中心</span>
+            <span className="app-header__announcement" aria-live="polite">
+              ⚠️ 本站仅供个人学习测试，严禁商用，生成内容请遵守当地法律法规。支持批量生成，最大批量20条
+            </span>
+          </div>
           <button className="ghost logout-button" type="button" onClick={handleLogout}>
             退出登录
           </button>

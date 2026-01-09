@@ -119,31 +119,6 @@ button {
   height: 100vh;
 }
 
-.announcement-bar {
-  background: #f97316;
-  color: #0f172a;
-  font-weight: 700;
-  padding: 8px 0;
-  border-bottom: 1px solid #ea580c;
-  overflow: hidden;
-}
-
-.announcement-text {
-  display: inline-block;
-  padding-left: 100%;
-  white-space: nowrap;
-  animation: announcement-scroll 18s linear infinite;
-}
-
-@keyframes announcement-scroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-100%);
-  }
-}
-
 .app-header {
   height: 60px;
   background: #1e293b;
@@ -155,6 +130,22 @@ button {
   font-size: 20px;
   font-weight: 700;
   color: #f8fafc;
+}
+
+.app-header__info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.app-header__announcement {
+  color: #38bdf8;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .logout-button {
