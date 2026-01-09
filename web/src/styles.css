@@ -893,6 +893,7 @@ select {
   display: grid;
   gap: 24px;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
 }
 
 .admin-card {
@@ -902,6 +903,22 @@ select {
   padding: 20px;
   display: grid;
   gap: 16px;
+}
+
+.admin-card--account,
+.admin-card--uploads {
+  height: 560px;
+}
+
+.admin-card--uploads {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-card--uploads .upload-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .admin-card-header {
